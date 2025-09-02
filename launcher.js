@@ -195,7 +195,7 @@ import WinReg from "winreg";
 const app = express();
 
 app.use(cors({
-  origin: ["http://localhost:5173", "https://erpwebapp-client.onrender.com"],
+   origin: ["http://localhost:5173", "https://erpwebapp-client.onrender.com","https://erp.binshabibgroup.ae","https://saeedcont.erp.binshabibgroup.ae","https://ralscont.erp.binshabibgroup.ae","https://hamda.erp.binshabibgroup.ae"], 
 }));
 
 const runningProcesses = new Map();
