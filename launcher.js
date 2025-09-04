@@ -191,6 +191,7 @@ import fs from "fs";
 import fse from "fs-extra";
 import path from "path";
 import WinReg from "winreg";
+import { connectMongo } from './db.js';
 
 const app = express();
 
@@ -199,6 +200,70 @@ app.use(cors({
 }));
 
 const runningProcesses = new Map();
+
+function extractCatalog(connectionString) {
+  const match = /Initial catalog=([^;]+)/i.exec(connectionString);
+  return match ? match[1].trim() : null;
+}
+
+function getConnectionStringFromRegistry() {
+  return new Promise((resolve, reject) => {
+    const regKey = new WinReg({
+      hive: WinReg.HKLM,
+      key: '\\SOFTWARE\\TwoBase.Net'
+    });
+
+    regKey.get('DataPath', (err, item) => {
+      if (err) {
+        console.error("❌ Registry read error for data path:", err);
+        return reject(err);
+      }
+      resolve(item.value);
+    });
+  });
+}
+
+async function getCatalogFromRegistry() {
+  try {
+    const connectionString = await getConnectionStringFromRegistry();
+    const catalog = extractCatalog(connectionString);
+    console.log("📂 Catalog extracted:", catalog);
+    return catalog;
+  } catch (err) {
+    console.error("❌ Failed to get catalog:", err);
+    return null;
+  }
+}
+
+app.get('/catalog', async (req, res) => {
+  const username = req.query.username?.trim().toLowerCase();
+  if (!username) {
+    return res.status(400).json({ message: "Username is required" });
+  }
+
+  try {
+    const catalog = await getCatalogFromRegistry();
+    if (!catalog) return res.status(404).send('Catalog not found');
+
+    const db = await connectMongo('BinShabibEstateNet');
+    const catalogCollection = db.collection('dbo.catalog');
+
+    const timestamp = new Date();
+
+    await catalogCollection.updateOne(
+      { username },
+      { $set: { catalog, insertedAt: timestamp } },
+      { upsert: true }
+    );
+
+    // Respond success, no catalog sent back
+    console.log("Catalog updated successfully for user:", username);
+
+  } catch (err) {
+    console.error("Error in /catalog:", err);
+    res.status(500).send('Error processing request');
+  }
+});
 
 // Read EXESERVERPATH from registry
 function getExeServerPathFromRegistry() {
@@ -355,6 +420,7 @@ app.get('/launch', async (req, res) => {
 
     const argString = `/nolog/guname=${username}/CoRecNo=${cocode}`;
     console.log(`🚀 Launching EXE: ${exePath} ${argString}`);
+    console.log(`${username} is launching ${moduleName} for CoRecNo=${cocode}`);
 
     const child = execFile(exePath, [argString], (error, stdout, stderr) => {
       if (error) {
