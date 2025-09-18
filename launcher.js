@@ -753,6 +753,45 @@ app.get("/create-launcher-folder", (req, res) => {
   });
 });
 
+// launcher.js
+app.get('/check-registry', (req, res) => {
+  // Check TwoBase.Net registry
+  const regKey = new WinReg({
+    hive: WinReg.HKLM,
+    key: '\\SOFTWARE\\TwoBase.Net'
+  });
+
+  regKey.get('DataPath', (err, item) => {
+    if (err || !item || !item.value) {
+      return res.json({ success: false, message: "TwoBase.Net registry not set" });
+    }
+    const twobase = item.value;
+    // Check if twobase matches your expected string (adjust as needed)
+    const isTwoBaseOk = twobase.includes("Initial catalog=BINSHABIBNet121919");
+    console.log("TwoBase.Net registry check:", isTwoBaseOk);
+    // Now check Estate
+    const estateKey = new WinReg({
+      hive: WinReg.HKLM,
+      key: '\\SOFTWARE\\EstateNet'
+    });
+
+    estateKey.get('DataPath', (err2, item2) => {
+      if (err2 || !item2 || !item2.value) {
+        return res.json({ success: false, message: "Estate registry not set" });
+      }
+      const estate = item2.value;
+      const isEstateOk = estate.includes("Initial catalog=BinShabibEstateNet");
+      console.log("Estate registry check:", isEstateOk);
+
+      if (isTwoBaseOk && isEstateOk) {
+        return res.json({ success: true });
+      } else {
+        return res.json({ success: false, message: "Registry values incorrect" });
+      }
+    });
+  });
+});
+
 
 const PORT = 5002;
 app.listen(PORT, () => {
