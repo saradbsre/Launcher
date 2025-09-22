@@ -1,189 +1,3 @@
-// import express from "express";
-// import { execFile } from "child_process";
-// import cors from "cors";
-// import fs from "fs";
-// import fse from "fs-extra";
-// import path from "path";
-// import WinReg from "winreg";
-
-// const app = express();
-
-// app.use(cors({
-//   origin: ["http://localhost:5173", "https://erpwebapp-client.onrender.com"],
-// }));
-
-// const runningProcesses = new Map();
-
-// // Read EXESERVERPATH from registry
-// function getExeServerPathFromRegistry() {
-//   return new Promise((resolve, reject) => {
-//     const regKey = new WinReg({
-//       hive: WinReg.HKLM,                 // Make sure this matches your registry location
-//       key: '\\SOFTWARE\\TwoBase.Net'    // Correct registry key path
-//     });
-
-//     regKey.get('ExeServerPath', (err, item) => {
-//       if (err) {
-//         console.error("❌ Registry read error:", err);
-//         return reject(err);
-//       }
-//       console.log("🔑 Registry value found:", item.value);
-//       resolve(item.value);
-//     });
-//   });
-// }
-
-// // Sync updated files from remote folder to local
-// async function syncUpdatedFiles(remoteDir, localDir) {
-//   console.log(`🛠️  Starting sync from ${remoteDir} → ${localDir}`);
-
-//   if (!fs.existsSync(remoteDir)) {
-//     console.error(`❌ Remote folder does not exist: ${remoteDir}`);
-//     throw new Error(`Remote folder does not exist: ${remoteDir}`);
-//   }
-
-//   await fse.ensureDir(localDir);
-
-//   const files = await fse.readdir(remoteDir);
-//   console.log(`📁 Found ${files.length} files in remote folder.`);
-
-//   let updatedCount = 0;
-
-//   for (const file of files) {
-//     const remoteFilePath = path.join(remoteDir, file);
-//     const localFilePath = path.join(localDir, file);
-
-//     const remoteStats = await fse.stat(remoteFilePath).catch(() => null);
-//     const localStats = await fse.stat(localFilePath).catch(() => null);
-
-//     if (!remoteStats) {
-//       console.warn(`⚠️  Skipping ${file} - remote file does not exist or can't be read.`);
-//       continue;
-//     }
-
-//     const isUpdated = !localStats || remoteStats.mtime > localStats.mtime;
-
-//     if (isUpdated) {
-//       console.log(`⬆️  Copying updated file: ${file}`);
-//       await fse.copy(remoteFilePath, localFilePath);
-//       updatedCount++;
-//     } else {
-//       console.log(`✅ Up-to-date: ${file}`);
-//     }
-//   }
-
-//   if (updatedCount === 0) {
-//     console.log(`📦 No updates were necessary. All files are up-to-date.`);
-//   } else {
-//     console.log(`✅ Sync completed. ${updatedCount} file(s) updated.`);
-//   }
-// }
-
-// // Launch application endpoint
-// app.get('/launch', async (req, res) => {
-//   console.log("🟢 /launch endpoint hit with query:", req.query);
-
-//   const { path: exePath, username, cocode, module: moduleName } = req.query;
-
-//   if (!exePath || !username || !cocode || !moduleName) {
-//     console.warn("❌ Missing required parameters");
-//     return res.status(400).send("Missing required parameters.");
-//   }
-
-//   // if (runningProcesses.has(username)) {
-//   //   const { module: runningModule } = runningProcesses.get(username);
-//   //   if (runningModule === moduleName) {
-//   //     return res.status(409).send("Module already running.");
-//   //   } else {
-//   //     return res.status(409).send("Another module is already running.");
-//   //   }
-//   // }
-//    if (runningProcesses.has(username)) {
-//     const { module: runningModule, cocode: runningCocode } = runningProcesses.get(username);
-
-//     // console.log("🧠 runningProcesses:", runningProcesses.get(username));
-//     // console.log("🧠 Incoming:", { moduleName, cocode });
-
-//     if (
-//       runningModule === moduleName &&
-//       String(runningCocode) === String(cocode)
-//     ) {
-//       return res.status(409).send("Module already running.");
-//     } else {
-//       return res.status(409).send("Another module is already running.");
-//     }
-//   }
-
-//   try {
-//     const exeServerPath = await getExeServerPathFromRegistry();
-//     console.log("🔑 EXESERVERPATH from registry:", exeServerPath);
-
-//     const moduleDir = path.dirname(exePath);
-//     const moduleFolderName = path.basename(moduleDir);
-//     const remoteModulePath = path.join(exeServerPath, moduleFolderName);
-
-//     console.log(`🔄 Syncing files from ${remoteModulePath} → ${moduleDir}`);
-//     await syncUpdatedFiles(remoteModulePath, moduleDir);
-
-//     const argString = `/nolog/guname=${username}/CoRecNo=${cocode}`;
-//     console.log(`🚀 Launching EXE: ${exePath} ${argString}`);
-
-//     const child = execFile(exePath, [argString], (error, stdout, stderr) => {
-//       if (error) {
-//         if (error.killed && error.signal === 'SIGTERM') {
-//           console.log(`🛑 Process killed intentionally for user ${username}`);
-//         } else {
-//           console.error(`❌ Error launching app for ${username}:`, error);
-//         }
-//       }
-
-//       console.log(`👋 App exited for user ${username}`);
-//       if (stdout) console.log("stdout:", stdout);
-//       if (stderr) console.log("stderr:", stderr);
-
-//       runningProcesses.delete(username);
-//     });
-
-//     runningProcesses.set(username, { process: child, module: moduleName, cocode });
-//     res.send("✅ Application launched successfully!");
-//   } catch (err) {
-//     console.error("❌ Launch error:", err.message);
-//     res.status(500).send(`Failed to launch application: ${err.message}`);
-//   }
-// });
-
-// // Logout and kill running app
-// app.get('/logout', (req, res) => {
-//   const { username } = req.query;
-
-//   if (!username) {
-//     console.warn("❌ Username required for logout");
-//     return res.status(400).send("Username required");
-//   }
-
-//   const entry = runningProcesses.get(username);
-//   if (entry) {
-//     const { process: child } = entry;
-//     if (child && typeof child.kill === "function") {
-//       child.kill();
-//     }
-
-//     runningProcesses.delete(username);
-//     console.log(`🔒 Application process killed for user ${username}`);
-//     return res.send("✅ Application closed successfully!");
-//   }
-
-//   res.status(404).send("No running application found for user");
-// });
-
-// const PORT = 5002;
-// app.listen(PORT, () => {
-//   console.log(`🚀 Local launcher running on port ${PORT}`);
-// });
-
-
-
-
 import express from "express";
 import { execFile } from "child_process";
 import cors from "cors";
@@ -315,11 +129,11 @@ async function syncUpdatedFiles(remoteDir, localDir,onProgress) {
     const isUpdated = !localStats || remoteStats.mtime > localStats.mtime;
 
     if (isUpdated) {
-      console.log(`⬆️  Copying updated file: ${file}`);
+      // console.log(`⬆️  Copying updated file: ${file}`);
       await fse.copy(remoteFilePath, localFilePath);
       updatedCount++;
     } else {
-      console.log(`✅ Up-to-date: ${file}`);
+      // console.log(`✅ Up-to-date: ${file}`);
     }
   }
   onProgress?.(`📦 Sync complete.`);
@@ -330,221 +144,6 @@ async function syncUpdatedFiles(remoteDir, localDir,onProgress) {
     console.log(`✅ Sync completed. ${updatedCount} file(s) updated.`);
   }
 }
-
-
-// app.get('/sync-progress', async (req, res) => {
-//   const { exePath } = req.query;
-
-//   if (!exePath) {
-//     return res.status(400).send("exePath query param is required");
-//   }
-
-//   const moduleDir = path.dirname(exePath);
-//   const moduleFolderName = path.basename(moduleDir);
-
-//   try {
-//     const exeServerPath = await getExeServerPathFromRegistry();
-//     const remoteModulePath = path.join(exeServerPath, moduleFolderName);
-
-//     // Setup SSE headers
-//     res.writeHead(200, {
-//       'Content-Type': 'text/event-stream',
-//       'Cache-Control': 'no-cache',
-//       'Connection': 'keep-alive',
-//     });
-
-//     function sendEvent(data) {
-//       res.write(`data: ${data}\n\n`);
-//     }
-
-//     sendEvent(`🔄 Starting sync from ${remoteModulePath} → ${moduleDir}`);
-
-//     await syncUpdatedFiles(remoteModulePath, moduleDir, (msg) => {
-//       sendEvent(msg);
-//     });
-
-//     sendEvent("✅ Sync finished.");
-//     res.end();
-//   } catch (err) {
-//     sendEvent(`❌ Sync error: ${err.message}`);
-//     res.end();
-//   }
-// });
-
-
-// Launch application endpoint
-// app.get('/launch', async (req, res) => {
-//   console.log("🟢 /launch endpoint hit with query:", req.query);
-
-//   const { path: exePath, username, cocode, module: moduleName } = req.query;
-
-//   if (!exePath || !username || !cocode || !moduleName) {
-//     console.warn("❌ Missing required parameters");
-//     return res.status(400).send("Missing required parameters.");
-//   }
-
-//   // if (runningProcesses.has(username)) {
-//   //   const { module: runningModule } = runningProcesses.get(username);
-//   //   if (runningModule === moduleName) {
-//   //     return res.status(409).send("Module already running.");
-//   //   } else {
-//   //     return res.status(409).send("Another module is already running.");
-//   //   }
-//   // }
-//    if (runningProcesses.has(username)) {
-//     const { module: runningModule, cocode: runningCocode } = runningProcesses.get(username);
-
-//     // console.log("🧠 runningProcesses:", runningProcesses.get(username));
-//     // console.log("🧠 Incoming:", { moduleName, cocode });
-
-//     if (
-//       runningModule === moduleName &&
-//       String(runningCocode) === String(cocode)
-//     ) {
-//       return res.status(409).send("Module already running.");
-//     } else {
-//       return res.status(409).send("Another module is already running.");
-//     }
-//   }
-
-//   try {
-//     const exeServerPath = await getExeServerPathFromRegistry();
-//     console.log("🔑 EXESERVERPATH from registry:", exeServerPath);
-
-//     const moduleDir = path.dirname(exePath);
-//     const moduleFolderName = path.basename(moduleDir);
-//     const remoteModulePath = path.join(exeServerPath, moduleFolderName);
-
-//     console.log(`🔄 Syncing files from ${remoteModulePath} → ${moduleDir}`);
-//     await syncUpdatedFiles(remoteModulePath, moduleDir);
-
-//     const argString = `/nolog/guname=${username}/CoRecNo=${cocode}`;
-//     console.log(`🚀 Launching EXE: ${exePath} ${argString}`);
-//     console.log(`${username} is launching ${moduleName} for CoRecNo=${cocode}`);
-
-//     const child = execFile(exePath, [argString], (error, stdout, stderr) => {
-//       if (error) {
-//         if (error.killed && error.signal === 'SIGTERM') {
-//           console.log(`🛑 Process killed intentionally for user ${username}`);
-//         } else {
-//           console.error(`❌ Error launching app for ${username}:`, error);
-//         }
-//       }
-
-//       console.log(`👋 App exited for user ${username}`);
-//       if (stdout) console.log("stdout:", stdout);
-//       if (stderr) console.log("stderr:", stderr);
-
-//       runningProcesses.delete(username);
-//     });
-
-//     runningProcesses.set(username, { process: child, module: moduleName, cocode });
-//     res.send("✅ Application launched successfully!");
-//   } catch (err) {
-//     console.error("❌ Launch error:", err.message);
-//     res.status(500).send(`Failed to launch application: ${err.message}`);
-//   }
-// });
-
-
-
-// app.get('/launch', async (req, res) => {
-//   console.log("🟢 /launch endpoint hit with query:", req.query);
-
-//   const { path: exePath, username, cocode, module: moduleName } = req.query;
-
-//   if (!exePath || !username || !cocode || !moduleName) {
-//     console.warn("❌ Missing required parameters");
-//     return res.status(400).send("Missing required parameters.");
-//   }
-
-//   if (!runningProcesses.has(username)) {
-//     runningProcesses.set(username, new Map());
-//   }
-
-//   const userProcesses = runningProcesses.get(username);
-
-//   if (userProcesses.has(moduleName)) {
-//     const runningCocode = userProcesses.get(moduleName).cocode;
-
-//     if (String(runningCocode) === String(cocode)) {
-//       return res.status(409).send("Module already running.");
-//     }
-//     // If you want to allow different cocodes for the same module to run simultaneously,
-//     // then you can skip blocking here.
-//   }
-
-//   try {
-//     const exeServerPath = await getExeServerPathFromRegistry();
-//     console.log("🔑 EXESERVERPATH from registry:", exeServerPath);
-
-//     const moduleDir = path.dirname(exePath);
-//     const moduleFolderName = path.basename(moduleDir);
-//     const remoteModulePath = path.join(exeServerPath, moduleFolderName);
-
-//     console.log(`🔄 Syncing files from ${remoteModulePath} → ${moduleDir}`);
-//     await syncUpdatedFiles(remoteModulePath, moduleDir);
-
-//     const argString = `/nolog/guname=${username}/CoRecNo=${cocode}`;
-//     console.log(`🚀 Launching EXE: ${exePath} ${argString}`);
-//     console.log(`${username} is launching ${moduleName} for CoRecNo=${cocode}`);
-
-//     const child = execFile(exePath, [argString], (error, stdout, stderr) => {
-//       if (error) {
-//         if (error.killed && error.signal === 'SIGTERM') {
-//           console.log(`🛑 Process killed intentionally for user ${username}`);
-//         } else {
-//           console.error(`❌ Error launching app for ${username}:`, error);
-//         }
-//       }
-
-//       console.log(`👋 App exited for user ${username}`);
-//       if (stdout) console.log("stdout:", stdout);
-//       if (stderr) console.log("stderr:", stderr);
-
-//       // Remove this module from user's running processes
-//       userProcesses.delete(moduleName);
-
-//       // If user has no more running modules, remove the user entry
-//       if (userProcesses.size === 0) {
-//         runningProcesses.delete(username);
-//       }
-//     });
-
-//     // Store running process for this module under the user
-//     userProcesses.set(moduleName, { process: child, cocode });
-
-//     res.send("✅ Application launched successfully!");
-//   } catch (err) {
-//     console.error("❌ Launch error:", err.message);
-//     res.status(500).send(`Failed to launch application: ${err.message}`);
-//   }
-// });
-
-
-// // Logout and kill running app
-// app.get('/logout', (req, res) => {
-//   const { username } = req.query;
-
-//   if (!username) {
-//     console.warn("❌ Username required for logout");
-//     return res.status(400).send("Username required");
-//   }
-
-//   const entry = runningProcesses.get(username);
-//   if (entry) {
-//     const { process: child } = entry;
-//     if (child && typeof child.kill === "function") {
-//       child.kill();
-//     }
-
-//     runningProcesses.delete(username);
-//     console.log(`🔒 Application process killed for user ${username}`);
-//     return res.send("✅ Application closed successfully!");
-//   }
-
-//   res.status(404).send("No running application found for user");
-// });
 
 app.get('/sync-progress', async (req, res) => {
   const { exePath } = req.query;
@@ -586,31 +185,29 @@ app.get('/sync-progress', async (req, res) => {
 });
 
 app.get('/launch', async (req, res) => {
-  console.log("🟢 /launch endpoint hit with query:", req.query);
+  // console.log("🟢 /launch endpoint hit with query:", req.query);
 
-  const { path: exePath, username, cocode, module: moduleName } = req.query;
+  const { path: exePath, username, cocode, module: moduleName, companyName } = req.query;
 
-  if (!exePath || !username || !cocode || !moduleName) {
+  if (!exePath || !username || !cocode || !moduleName || !companyName) {
     console.warn("❌ Missing required parameters");
     return res.status(400).send("Missing required parameters.");
   }
 
+  // --- Check if module is already running BEFORE copying files ---
   if (!runningProcesses.has(username)) {
     runningProcesses.set(username, new Map());
   }
 
   const userProcesses = runningProcesses.get(username);
 
-  if (userProcesses.has(moduleName)) {
-    const runningCocode = userProcesses.get(moduleName).cocode;
-
-    if (String(runningCocode) === String(cocode)) {
-      return res.status(409).send("Module already running.");
-    }
+  const processKey = `${moduleName}_${cocode}`;
+  if (userProcesses.has(processKey)) {
+    return res.status(409).send("Module already running for this fiscal year.");
   }
 
   try {
-    // Replace this with your actual logic to get exe server path
+    // Only copy files if module is NOT running
     const exeServerPath = await getExeServerPathFromRegistry();
     console.log("🔑 EXESERVERPATH from registry:", exeServerPath);
 
@@ -625,6 +222,7 @@ app.get('/launch', async (req, res) => {
     console.log(`🚀 Launching EXE: ${exePath} ${argString}`);
     console.log(`${username} is launching ${moduleName} for CoRecNo=${cocode}`);
 
+    const processKey = `${moduleName}_${cocode}`;
     const child = execFile(exePath, [argString], (error, stdout, stderr) => {
       if (error && !error.killed) {
         console.error(`❌ Error launching app for ${username}:`, error);
@@ -634,16 +232,22 @@ app.get('/launch', async (req, res) => {
     });
 
     child.on('exit', (code, signal) => {
-      console.log(`👋 App exited for user ${username} module ${moduleName} with code ${code} and signal ${signal}`);
-
-      userProcesses.delete(moduleName);
-
+      // console.log(`👋 App exited for user ${username} module ${moduleName} with code ${code} and signal ${signal}`);
+      userProcesses.delete(processKey); // Use processKey here!
       if (userProcesses.size === 0) {
         runningProcesses.delete(username);
       }
     });
 
-    userProcesses.set(moduleName, { process: child, cocode });
+    userProcesses.set(processKey, { process: child, cocode, companyName: req.query.companyName });
+    console.log("=== Running Processes ===");
+    for (const [username, userProcesses] of runningProcesses.entries()) {
+      for (const [key, { process: proc, cocode, companyName }] of userProcesses.entries()) {
+        const [modName, coCode] = key.split('_');
+        console.log(`User: ${username}, Module: ${modName}, PID: ${proc.pid}, cocode: ${coCode}, CompanyName: ${companyName}`);
+      }
+    }
+    console.log("========================");
 
     res.send("✅ Application launched successfully!");
   } catch (err) {
@@ -654,7 +258,7 @@ app.get('/launch', async (req, res) => {
 
 
 app.get('/logout', (req, res) => {
-  const { username, module: moduleName } = req.query;
+  const { username, companyName } = req.query;
 
   if (!username) {
     console.warn("❌ Username required for logout");
@@ -667,36 +271,38 @@ app.get('/logout', (req, res) => {
 
   const userProcesses = runningProcesses.get(username);
 
-  if (moduleName) {
-    // Kill specific module process
-    if (!userProcesses.has(moduleName)) {
-      return res.status(404).send(`No running module '${moduleName}' found for user`);
+  // If companyName is provided, remove all processes for that company
+  if (companyName) {
+    let found = false;
+    for (const [key, procObj] of userProcesses.entries()) {
+      if (procObj.companyName === companyName) {
+        if (procObj.process && typeof procObj.process.kill === "function") {
+          procObj.process.kill();
+        }
+        userProcesses.delete(key);
+        found = true;
+      }
     }
-
-    const { process: child } = userProcesses.get(moduleName);
-    if (child && typeof child.kill === "function") {
-      child.kill();
-    }
-
-    userProcesses.delete(moduleName);
-
     if (userProcesses.size === 0) {
       runningProcesses.delete(username);
     }
-
-    console.log(`🔒 Application process for module '${moduleName}' killed for user ${username}`);
-    return res.send(`✅ Module '${moduleName}' closed successfully!`);
-  } else {
-    // Kill all modules for user
-    for (const [modName, { process: child }] of userProcesses.entries()) {
-      if (child && typeof child.kill === "function") {
-        child.kill();
-      }
+    if (found) {
+      console.log(`🔒 All application processes for company '${companyName}' killed for user ${username}`);
+      return res.send(`✅ All modules for company '${companyName}' closed successfully!`);
+    } else {
+      return res.status(404).send(`No running modules for company '${companyName}' found for user`);
     }
-    runningProcesses.delete(username);
-    console.log(`🔒 All application processes killed for user ${username}`);
-    return res.send("✅ All applications closed successfully!");
   }
+
+  // If no companyName, kill all modules for user
+  for (const [key, { process: child }] of userProcesses.entries()) {
+    if (child && typeof child.kill === "function") {
+      child.kill();
+    }
+  }
+  runningProcesses.delete(username);
+  // console.log(`🔒 All application processes killed for user ${username}`);
+  return res.send("✅ All applications closed successfully!");
 });
 
 app.get("/check-folder", (req, res) => {
@@ -768,7 +374,7 @@ app.get('/check-registry', (req, res) => {
     const twobase = item.value;
     // Check if twobase matches your expected string (adjust as needed)
     const isTwoBaseOk = twobase.includes("Initial catalog=BINSHABIBNet121919");
-    console.log("TwoBase.Net registry check:", isTwoBaseOk);
+    // console.log("TwoBase.Net registry check:", isTwoBaseOk);
     // Now check Estate
     const estateKey = new WinReg({
       hive: WinReg.HKLM,
@@ -781,7 +387,7 @@ app.get('/check-registry', (req, res) => {
       }
       const estate = item2.value;
       const isEstateOk = estate.includes("Initial catalog=BinShabibEstateNet");
-      console.log("Estate registry check:", isEstateOk);
+      // console.log("Estate registry check:", isEstateOk);
 
       if (isTwoBaseOk && isEstateOk) {
         return res.json({ success: true });
