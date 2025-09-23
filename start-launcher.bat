@@ -58,6 +58,7 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo Step 4: Running node launcher.js...
+taskkill /F /IM node.exe >nul 2>nul
 node launcher.js
 echo node launcher.js exited with code %ERRORLEVEL%
 if %ERRORLEVEL% NEQ 0 (
