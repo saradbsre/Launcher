@@ -8,6 +8,7 @@ import WinReg from "winreg";
 import { connectMongo } from './db.js';
 
 const app = express();
+app.use(express.json());
 
 app.use(cors({
    origin: ["http://localhost:5173", "https://erpwebapp-client.onrender.com","https://erp.binshabibgroup.ae","https://saeedcont.erp.binshabibgroup.ae","https://ralscont.erp.binshabibgroup.ae","https://hamda.erp.binshabibgroup.ae"], 
@@ -360,7 +361,9 @@ app.get("/create-launcher-folder", (req, res) => {
 });
 
 // launcher.js
-app.get('/check-registry', (req, res) => {
+app.post('/check-registry', (req, res) => {
+  const { Estate, TwoBase } = req.body;
+
   // Check TwoBase.Net registry
   const regKey = new WinReg({
     hive: WinReg.HKLM,
@@ -373,8 +376,9 @@ app.get('/check-registry', (req, res) => {
     }
     const twobase = item.value;
     // Check if twobase matches your expected string (adjust as needed)
-    const isTwoBaseOk = twobase.includes("Initial catalog=BINSHABIBNet121919");
-    // console.log("TwoBase.Net registry check:", isTwoBaseOk);
+    console.log("Registry value (twobase):", TwoBase);
+    const isTwoBaseOk = twobase.includes(TwoBase);
+    console.log("TwoBase.Net registry check:", isTwoBaseOk);
     // Now check Estate
     const estateKey = new WinReg({
       hive: WinReg.HKLM,
@@ -386,8 +390,8 @@ app.get('/check-registry', (req, res) => {
         return res.json({ success: false, message: "Estate registry not set" });
       }
       const estate = item2.value;
-      const isEstateOk = estate.includes("Initial catalog=BinShabibEstateNet");
-      // console.log("Estate registry check:", isEstateOk);
+      const isEstateOk = estate.includes(Estate);
+      console.log("Estate registry check:", isEstateOk);
 
       if (isTwoBaseOk && isEstateOk) {
         return res.json({ success: true });
