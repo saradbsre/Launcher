@@ -11,7 +11,7 @@ const app = express();
 app.use(express.json());
 
 app.use(cors({
-   origin: ["http://localhost:5173", "https://erpwebapp-client.onrender.com","https://erp.binshabibgroup.ae","https://saeedcont.erp.binshabibgroup.ae","https://ralscont.erp.binshabibgroup.ae","https://hamda.erp.binshabibgroup.ae"], 
+   origin: ["http://localhost:5173", "https://erpwebapp-client.onrender.com","https://bsre.erp.binshabibgroup.ae","https://saeedcont.erp.binshabibgroup.ae","https://ralscont.erp.binshabibgroup.ae","https://hamda.erp.binshabibgroup.ae"], 
 }));
 
 const runningProcesses = new Map();
