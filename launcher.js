@@ -5,13 +5,13 @@ import fs from "fs";
 import fse from "fs-extra";
 import path from "path";
 import WinReg from "winreg";
-import { connectMongo } from './db.js';
+import { connectMssql } from './db.js';
 
 const app = express();
 app.use(express.json());
 
 app.use(cors({
-   origin: ["http://localhost:5173", "https://erpwebapp-client.onrender.com","https://bsre.erp.binshabibgroup.ae","https://saeedcont.erp.binshabibgroup.ae","https://ralscont.erp.binshabibgroup.ae","https://hamda.erp.binshabibgroup.ae"], 
+   origin: ["http://localhost:5173", "https://erpwebapp-client.onrender.com","https://erp.bsre.binshabibgroup.ae","https://erp.saeedcont.binshabibgroup.ae","https://erp.ralscont.binshabibgroup.ae","https://erp.hamda.binshabibgroup.ae","https://erp.cs.binshabibgroup.ae"], 
 }));
 
 const runningProcesses = new Map();
@@ -50,35 +50,35 @@ async function getCatalogFromRegistry() {
   }
 }
 
-app.get('/catalog', async (req, res) => {
-  const username = req.query.username?.trim().toLowerCase();
-  if (!username) {
-    return res.status(400).json({ message: "Username is required" });
-  }
+// app.get('/catalog', async (req, res) => {
+//   const username = req.query.username?.trim().toLowerCase();
+//   if (!username) {
+//     return res.status(400).json({ message: "Username is required" });
+//   }
 
-  try {
-    const catalog = await getCatalogFromRegistry();
-    if (!catalog) return res.status(404).send('Catalog not found');
+//   try {
+//     const catalog = await getCatalogFromRegistry();
+//     if (!catalog) return res.status(404).send('Catalog not found');
 
-    const db = await connectMongo('BinShabibEstateNet');
-    const catalogCollection = db.collection('dbo.catalog');
+//     const db = await connectMongo('BinShabibEstateNet');
+//     const catalogCollection = db.collection('dbo.catalog');
 
-    const timestamp = new Date();
+//     const timestamp = new Date();
 
-    await catalogCollection.updateOne(
-      { username },
-      { $set: { catalog, insertedAt: timestamp } },
-      { upsert: true }
-    );
+//     await catalogCollection.updateOne(
+//       { username },
+//       { $set: { catalog, insertedAt: timestamp } },
+//       { upsert: true }
+//     );
 
-    // Respond success, no catalog sent back
-    console.log("Catalog updated successfully for user:", username);
+//     // Respond success, no catalog sent back
+//     console.log("Catalog updated successfully for user:", username);
 
-  } catch (err) {
-    console.error("Error in /catalog:", err);
-    res.status(500).send('Error processing request');
-  }
-});
+//   } catch (err) {
+//     console.error("Error in /catalog:", err);
+//     res.status(500).send('Error processing request');
+//   }
+// });
 
 // Read EXESERVERPATH from registry
 function getExeServerPathFromRegistry() {

@@ -6,6 +6,24 @@
     "fs-extra": "^11.3.1",
     "mongo": "^0.1.0",
     "mongodb": "^6.19.0",
+    "mssql": "^12.2.0",
     "winreg": "^1.2.5"
-  }
+  },
+  "name": "launcher",
+  "version": "1.0.0",
+  "main": "launcher.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/saradbsre/Launcher.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/saradbsre/Launcher/issues"
+  },
+  "homepage": "https://github.com/saradbsre/Launcher#readme",
+  "description": ""
 }
