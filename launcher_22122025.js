@@ -6,9 +6,6 @@ import fse from "fs-extra";
 import path from "path";
 import WinReg from "winreg";
 import { connectMssql } from './db.js';
-import os from 'os';
-import pkg from 'node-machine-id';
-const { machineIdSync } = pkg;
 
 const app = express();
 app.use(express.json());
@@ -187,62 +184,6 @@ app.get('/sync-progress', async (req, res) => {
     res.end();
   }
 });
-
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
-});
-
-app.get('/get-session', async (req, res) => {
-  const { username, dbName } = req.query;
-  if (!username || !dbName) {
-    return res.status(400).json({ message: "username and dbName are required" });
-  }
-
-  try {
-    const sql = await connectMssql();
-    await sql.query(`USE [${dbName}]`);
-
-    const result = await sql.query`
-      SELECT * FROM WebLoginSessions WHERE Username = ${username}
-    `;
-
-    if (result.recordset.length === 0) {
-      return res.status(404).json({ message: "Session not found" });
-    }
-    console.log("✅ Session fetched successfully for user:", username);
-
-   // res.json({ success: true, session: result.recordset[0] });
-      const computerName = os.hostname();
-  const machineId = machineIdSync();
-  
-  try {
-    // Connect to the default DB first
-    const sql = await connectMssql();
-    // Switch to the requested DB
-    await sql.query(`USE [${dbName}]`);
-
-    // Update the session info
-    const result = await sql.query`
-      UPDATE WebLoginSessions
-      SET MachineID = ${machineId}, ComputerName = ${computerName}
-      WHERE Username = ${username}
-    `;
-
-    console.log("✅ Session updated successfully for user:", username);
-
-    res.json({ success: true, rowsAffected: result.rowsAffected });
-  } catch (err) {
-    console.error("❌ Error updating session:", err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-
-  } catch (err) {
-    console.error("❌ Error fetching session:", err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-
 
 app.get('/launch', async (req, res) => {
   // console.log("🟢 /launch endpoint hit with query:", req.query);
