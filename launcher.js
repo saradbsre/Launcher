@@ -9,6 +9,8 @@ import { connectMssql } from './db.js';
 import os from 'os';
 import pkg from 'node-machine-id';
 const { machineIdSync } = pkg;
+//import { exec } from "child_process";
+
 
 const app = express();
 app.use(express.json());
@@ -191,6 +193,25 @@ app.get('/sync-progress', async (req, res) => {
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
+
+// app.get("/stop-launcher", (req, res) => {
+//   exec('taskkill /IM wscript.exe /F', (err, stdout, stderr) => {
+//     if (err) {
+//       if (stderr && stderr.toLowerCase().includes("not found")) {
+//         res.send("Launcher already stopped (wscript.exe not found).");
+//       } else {
+//         console.error("❌ Failed to stop launcher:", stderr || err.message);
+//         return res.status(500).send("Failed to stop launcher");
+//       }
+//     } else {
+//       res.send("Launcher stopped");
+//     }
+//     // Give the response time to be sent before exiting Node.js
+//     setTimeout(() => {
+//       process.exit(0);
+//     }, 500);
+//   });
+// });
 
 app.get('/get-session', async (req, res) => {
   const { username, dbName } = req.query;
