@@ -483,6 +483,23 @@ app.post('/check-registry', (req, res) => {
 });
 
 
+
+app.get('/is-running', (req, res) => {
+  const { username, module: moduleName, cocode } = req.query;
+  if (!username || !moduleName || !cocode) {
+    return res.status(400).json({ running: false });
+  }
+  if (!runningProcesses.has(username)) {
+    return res.json({ running: false });
+  }
+  const userProcesses = runningProcesses.get(username);
+  const processKey = `${moduleName}_${cocode}`;
+  if (!userProcesses.has(processKey)) {
+    return res.json({ running: false });
+  }
+  return res.json({ running: true });
+});
+
 const PORT = 5002;
 app.listen(PORT, () => {
   console.log(`🚀 Local launcher running on port ${PORT}`);
