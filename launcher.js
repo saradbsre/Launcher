@@ -213,53 +213,68 @@ app.get('/health', (req, res) => {
 //   });
 // });
 
+// Helper: map domain to DB config
+const domainDbMap = {
+  'erp.bsre.binshabibgroup.ae': 'BSREDB',
+  'erp.saeedcont.binshabibgroup.ae': 'SAEEDDB',
+  'erp.ralscont.binshabibgroup.ae': 'RALSDb',
+  // Add more mappings as needed
+};
+
+import mssql from 'mssql';
+import bsredbConfig from './config/bsredb.js';
+import awsdbConfig from './config/awsdb.js';
+import ralsdbConfig from './config/ralsdb.js';
+
+function getDbConfigForDomain(domain) {
+  // Map domain to config
+  if (domain.includes('bsre') || domain.includes('cs') || domain.includes('hama')) return bsredbConfig;
+  if (domain.includes('rals')) return awsdbConfig;
+  if (domain.includes('saeed')) return ralsdbConfig;
+  // Default fallback
+  return null;
+}
+
 app.get('/get-session', async (req, res) => {
-  const { username, dbName } = req.query;
-  if (!username || !dbName) {
-    return res.status(400).json({ message: "username and dbName are required" });
+  const { username,dbName,domainName } = req.query;
+  console.log("🟢 /get-session called with:", { username,dbName,domainName });
+  if (!username) {
+    return res.status(400).json({ message: "username is required" });
   }
 
-  try {
-    const sql = await connectMssql();
-    await sql.query(`USE [${dbName}]`);
+  const dbConfig = getDbConfigForDomain(  domainName );
+  console.log("Using DB config for domain:", domainName, dbConfig ? "found" : "not found");
+  if (!dbConfig) {
+    return res.status(400).json({ message: "Unknown or unsupported domain" });
+  }
 
-    const result = await sql.query`
-      SELECT * FROM WebLoginSessions WHERE Username = ${username}
-    `;
+  let pool;
+  try {
+    pool = await mssql.connect(dbConfig);
+    const result = await pool.request()
+      .input('username', mssql.VarChar, username)
+      .query(`SELECT * FROM ${dbName}.dbo.WebLoginSessions WHERE Username = @username`);
 
     if (result.recordset.length === 0) {
       return res.status(404).json({ message: "Session not found" });
     }
     console.log("✅ Session fetched successfully for user:", username);
 
-   // res.json({ success: true, session: result.recordset[0] });
-      const computerName = os.hostname();
-  const machineId = machineIdSync();
-  
-  try {
-    // Connect to the default DB first
-    const sql = await connectMssql();
-    // Switch to the requested DB
-    await sql.query(`USE [${dbName}]`);
+    // Update session info
+    const computerName = os.hostname();
+    const machineId = machineIdSync();
+    await pool.request()
+      .input('machineId', mssql.VarChar, machineId)
+      .input('computerName', mssql.VarChar, computerName)
+      .input('username', mssql.VarChar, username)
+      .query(`UPDATE ${dbName}.dbo.WebLoginSessions SET MachineID = @machineId, ComputerName = @computerName WHERE Username = @username`);
 
-    // Update the session info
-    const result = await sql.query`
-      UPDATE WebLoginSessions
-      SET MachineID = ${machineId}, ComputerName = ${computerName}
-      WHERE Username = ${username}
-    `;
-
-    console.log("✅ Session updated successfully for user:", username);
-
-    res.json({ success: true, rowsAffected: result.rowsAffected });
+    res.json({ success: true, session: result.recordset[0] });
   } catch (err) {
-    console.error("❌ Error updating session:", err);
+    console.error("❌ Error in get-session:", err);
     res.status(500).json({ success: false, message: err.message });
-  }
-
-  } catch (err) {
-    console.error("❌ Error fetching session:", err);
-    res.status(500).json({ success: false, message: err.message });
+  } finally {
+    if (pool) pool.close();
   }
 });
 
