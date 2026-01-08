@@ -15,9 +15,62 @@ const { machineIdSync } = pkg;
 const app = express();
 app.use(express.json());
 
-app.use(cors({
-   origin: ["http://localhost:5173", "https://erpwebapp-client.onrender.com","https://erp.bsre.binshabibgroup.ae","https://erp.saeedcont.binshabibgroup.ae","https://erp.ralscont.binshabibgroup.ae","https://erp.hamda.binshabibgroup.ae","https://erp.cs.binshabibgroup.ae"], 
-}));
+// app.use(cors({
+//    origin: ["http://localhost:5173", "https://erpwebapp-client.onrender.com","https://erp.bsre.binshabibgroup.ae","https://erp.saeedcont.binshabibgroup.ae","https://erp.ralscont.binshabibgroup.ae","https://erp.hamda.binshabibgroup.ae","https://erp.cs.binshabibgroup.ae"], 
+// }));
+
+
+// ✅ Keep your allowlist in ONE place
+const allowedOrigins = new Set([
+  "http://localhost:5173",
+  "https://erpwebapp-client.onrender.com",
+  "https://erp.bsre.binshabibgroup.ae",
+  "https://erp.saeedcont.binshabibgroup.ae",
+  "https://erp.ralscont.binshabibgroup.ae",
+  "https://erp.hamda.binshabibgroup.ae",
+  "https://erp.cs.binshabibgroup.ae",
+]);
+
+// ✅ MUST be before routes (and before/with cors) - fixes Saeedcont "unknown address space"
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  if (origin && allowedOrigins.has(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+  }
+
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+
+  // 🔥 Important for Chrome/Edge Private Network Access (public site -> localhost)
+  res.setHeader("Access-Control-Allow-Private-Network", "true");
+
+  // ✅ Reply to preflight immediately
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+
+  next();
+});
+
+// ✅ Normal CORS (kept for standard behavior)
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      // allow curl/postman (no Origin)
+      if (!origin) return cb(null, true);
+
+      if (allowedOrigins.has(origin)) return cb(null, true);
+
+      console.log("❌ CORS blocked origin:", origin);
+      return cb(new Error("CORS blocked: " + origin));
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
 
 const runningProcesses = new Map();
 
