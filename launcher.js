@@ -1,6 +1,6 @@
 import express from "express";
 import { execFile } from "child_process";
-//import cors from "cors";
+import cors from "cors";
 import fs from "fs";
 import fse from "fs-extra";
 import path from "path";
@@ -15,66 +15,9 @@ const { machineIdSync } = pkg;
 const app = express();
 app.use(express.json());
 
-// app.use(cors({
-//    origin: ["http://localhost:5173", "https://erpwebapp-client.onrender.com","https://erp.bsre.binshabibgroup.ae","https://erp.saeedcont.binshabibgroup.ae","https://erp.ralscont.binshabibgroup.ae","https://erp.hamda.binshabibgroup.ae","https://erp.cs.binshabibgroup.ae"], 
-// }));
-
-
-const allowedOrigins = new Set([
-  "http://localhost:5173",
-  "https://erpwebapp-client.onrender.com",
-  "https://erp.bsre.binshabibgroup.ae",
-  "https://erp.saeedcont.binshabibgroup.ae",
-  "https://erp.ralscont.binshabibgroup.ae",
-  "https://erp.hamda.binshabibgroup.ae",
-  "https://erp.cs.binshabibgroup.ae",
-]);
-
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-
-  // 🔍 Debug (this will tell you why rals differs from bsre)
-  if (origin) {
-    console.log("🌐 Origin:", origin, "|", req.method, req.url);
-    console.log("🔸 ACRPN:", req.headers["access-control-request-private-network"]);
-  }
-
-  if (origin && allowedOrigins.has(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-  }
-
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
-  // ✅ Required for Chrome/Edge Private Network Access preflight
-  res.setHeader("Access-Control-Allow-Private-Network", "true");
-
-  if (req.method === "OPTIONS") return res.sendStatus(204);
-
-  next();
-});
-
-
-// // ✅ Normal CORS (kept for standard behavior)
-// app.use(
-//   cors({
-//     origin: (origin, cb) => {
-//       // allow curl/postman (no Origin)
-//       if (!origin) return cb(null, true);
-
-//       if (allowedOrigins.has(origin)) return cb(null, true);
-
-//       console.log("❌ CORS blocked origin:", origin);
-//       return cb(new Error("CORS blocked: " + origin));
-//     },
-//     credentials: true,
-//     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-//     allowedHeaders: ["Content-Type", "Authorization"],
-//   })
-// );
-
+app.use(cors({
+   origin: ["http://localhost:5173", "https://erpwebapp-client.onrender.com","https://erp.bsre.binshabibgroup.ae","https://erp.saeedcont.binshabibgroup.ae","https://erp.ralscont.binshabibgroup.ae","https://erp.hamda.binshabibgroup.ae","https://erp.cs.binshabibgroup.ae"], 
+}));
 
 const runningProcesses = new Map();
 
@@ -112,35 +55,7 @@ async function getCatalogFromRegistry() {
   }
 }
 
-// app.get('/catalog', async (req, res) => {
-//   const username = req.query.username?.trim().toLowerCase();
-//   if (!username) {
-//     return res.status(400).json({ message: "Username is required" });
-//   }
 
-//   try {
-//     const catalog = await getCatalogFromRegistry();
-//     if (!catalog) return res.status(404).send('Catalog not found');
-
-//     const db = await connectMongo('BinShabibEstateNet');
-//     const catalogCollection = db.collection('dbo.catalog');
-
-//     const timestamp = new Date();
-
-//     await catalogCollection.updateOne(
-//       { username },
-//       { $set: { catalog, insertedAt: timestamp } },
-//       { upsert: true }
-//     );
-
-//     // Respond success, no catalog sent back
-//     console.log("Catalog updated successfully for user:", username);
-
-//   } catch (err) {
-//     console.error("Error in /catalog:", err);
-//     res.status(500).send('Error processing request');
-//   }
-// });
 
 // Read EXESERVERPATH from registry
 function getExeServerPathFromRegistry() {
@@ -285,7 +200,7 @@ import ralsdbConfig from './config/ralsdb.js';
 
 function getDbConfigForDomain(domain) {
   // Map domain to config
-  if (domain.includes('bsre') || domain.includes('cs') || domain.includes('hama')) return bsredbConfig;
+  if (domain.includes('bsre') || domain.includes('cs') || domain.includes('hamda')) return bsredbConfig;
   if (domain.includes('rals')) return awsdbConfig;
   if (domain.includes('saeed')) return ralsdbConfig;
   // Default fallback
@@ -334,6 +249,8 @@ app.get('/get-session', async (req, res) => {
     if (pool) pool.close();
   }
 });
+
+
 
 
 
