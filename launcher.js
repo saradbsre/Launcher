@@ -16,7 +16,16 @@ const app = express();
 app.use(express.json());
 
 app.use(cors({
-   origin: ["http://localhost:5173", "https://erpwebapp-client.onrender.com","https://erp.bsre.binshabibgroup.ae","https://erp.saeedcont.binshabibgroup.ae","https://erp.ralscont.binshabibgroup.ae","https://erp.hamda.binshabibgroup.ae","https://erp.cs.binshabibgroup.ae"], 
+   origin: ["http://localhost:5173", 
+    "https://erpwebapp-client.onrender.com",
+    "https://erp.bsre.binshabibgroup.ae",
+    "https://erp.saeedcont.binshabibgroup.ae",
+    "https://erp.ralscont.binshabibgroup.ae",
+    "https://erp.hamda.binshabibgroup.ae",
+    "https://erp.cs.binshabibgroup.ae",
+    "https://erp.manjalgranites.ae",
+    "https://erp.firehub.ae"
+  ],    
 }));
 
 const runningProcesses = new Map();
@@ -202,7 +211,7 @@ function getDbConfigForDomain(domain) {
   // Map domain to config
   if (domain.includes('bsre') || domain.includes('cs') || domain.includes('hamda')) return bsredbConfig;
   if (domain.includes('rals')) return awsdbConfig;
-  if (domain.includes('saeed')) return ralsdbConfig;
+  if (domain.includes('saeed') || domain.includes('manjal') || domain.includes('firehub')) return ralsdbConfig;
   // Default fallback
   return null;
 }
