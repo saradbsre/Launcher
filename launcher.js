@@ -9,7 +9,7 @@ import { connectMssql } from './db.js';
 import os from 'os';
 import pkg from 'node-machine-id';
 const { machineIdSync } = pkg;
-//import { exec } from "child_process";
+import { exec } from "child_process";
 
 
 const app = express();
@@ -203,6 +203,8 @@ const domainDbMap = {
 };
 
 import mssql from 'mssql';
+// If you need DateTime:
+const { DateTime } = mssql;
 import bsredbConfig from './config/bsredb.js';
 import awsdbConfig from './config/awsdb.js';
 import ralsdbConfig from './config/ralsdb.js';
@@ -223,7 +225,7 @@ app.get('/get-session', async (req, res) => {
     return res.status(400).json({ message: "username is required" });
   }
 
-  const dbConfig = getDbConfigForDomain(  domainName );
+  const dbConfig = getDbConfigForDomain(domainName);
   console.log("Using DB config for domain:", domainName, dbConfig ? "found" : "not found");
   if (!dbConfig) {
     return res.status(400).json({ message: "Unknown or unsupported domain" });
@@ -241,16 +243,9 @@ app.get('/get-session', async (req, res) => {
     }
     console.log("✅ Session fetched successfully for user:", username);
 
-    // Update session info
-    const computerName = os.hostname();
-    const machineId = machineIdSync();
-    await pool.request()
-      .input('machineId', mssql.VarChar, machineId)
-      .input('computerName', mssql.VarChar, computerName)
-      .input('username', mssql.VarChar, username)
-      .query(`UPDATE ${dbName}.dbo.WebLoginSessions SET MachineID = @machineId, ComputerName = @computerName WHERE Username = @username`);
-
-    res.json({ success: true, session: result.recordset[0] });
+    // Add computerName to response
+    res.json({ success: true, session: result.recordset[0], computerName: os.hostname() });
+    console.log("🏷️  Sent computer name:", os.hostname());
   } catch (err) {
     console.error("❌ Error in get-session:", err);
     res.status(500).json({ success: false, message: err.message });
@@ -264,9 +259,8 @@ app.get('/get-session', async (req, res) => {
 
 
 app.get('/launch', async (req, res) => {
-  // console.log("🟢 /launch endpoint hit with query:", req.query);
-
-  const { path: exePath, username, cocode, module: moduleName, companyName } = req.query;
+  // Extract query parameters
+  const { path: exePath, username, cocode, module: moduleName, companyName, allowMultipleTabs } = req.query;
 
   if (!exePath || !username || !cocode || !moduleName || !companyName) {
     console.warn("❌ Missing required parameters");
@@ -279,9 +273,10 @@ app.get('/launch', async (req, res) => {
   }
 
   const userProcesses = runningProcesses.get(username);
-
   const processKey = `${moduleName}_${cocode}`;
-  if (userProcesses.has(processKey)) {
+
+  // Only block if allowMultipleTabs is not set or is 0
+  if ((!allowMultipleTabs || allowMultipleTabs === "0" || allowMultipleTabs === 0) && userProcesses.has(processKey)) {
     return res.status(409).send("Module already running for this fiscal year.");
   }
 
@@ -301,7 +296,6 @@ app.get('/launch', async (req, res) => {
     console.log(`🚀 Launching EXE: ${exePath} ${argString}`);
     console.log(`${username} is launching ${moduleName} for CoRecNo=${cocode}`);
 
-    const processKey = `${moduleName}_${cocode}`;
     const child = execFile(exePath, [argString], (error, stdout, stderr) => {
       if (error && !error.killed) {
         console.error(`❌ Error launching app for ${username}:`, error);
@@ -311,19 +305,18 @@ app.get('/launch', async (req, res) => {
     });
 
     child.on('exit', (code, signal) => {
-      // console.log(`👋 App exited for user ${username} module ${moduleName} with code ${code} and signal ${signal}`);
-      userProcesses.delete(processKey); // Use processKey here!
+      userProcesses.delete(processKey);
       if (userProcesses.size === 0) {
         runningProcesses.delete(username);
       }
     });
 
-    userProcesses.set(processKey, { process: child, cocode, companyName: req.query.companyName });
+    userProcesses.set(processKey, { process: child, cocode, companyName, lastUpdated: Date.now() });
     console.log("=== Running Processes ===");
-    for (const [username, userProcesses] of runningProcesses.entries()) {
-      for (const [key, { process: proc, cocode, companyName }] of userProcesses.entries()) {
+    for (const [uname, procs] of runningProcesses.entries()) {
+      for (const [key, { process: proc, cocode, companyName }] of procs.entries()) {
         const [modName, coCode] = key.split('_');
-        console.log(`User: ${username}, Module: ${modName}, PID: ${proc.pid}, cocode: ${coCode}, CompanyName: ${companyName}`);
+        console.log(`User: ${uname}, Module: ${modName}, PID: ${proc.pid}, cocode: ${coCode}, CompanyName: ${companyName}`);
       }
     }
     console.log("========================");
@@ -334,6 +327,7 @@ app.get('/launch', async (req, res) => {
     res.status(500).send(`Failed to launch application: ${err.message}`);
   }
 });
+
 
 
 app.get('/logout', (req, res) => {
@@ -485,17 +479,52 @@ app.post('/check-registry', (req, res) => {
 app.get('/is-running', (req, res) => {
   const { username, module: moduleName, cocode } = req.query;
   if (!username || !moduleName || !cocode) {
-    return res.status(400).json({ running: false });
+    return res.status(400).json({ running: false, lastUpdated: false });
   }
   if (!runningProcesses.has(username)) {
-    return res.json({ running: false });
+    return res.json({ running: false, lastUpdated: false });
   }
   const userProcesses = runningProcesses.get(username);
   const processKey = `${moduleName}_${cocode}`;
   if (!userProcesses.has(processKey)) {
-    return res.json({ running: false });
+    return res.json({ running: false, lastUpdated: false });
   }
-  return res.json({ running: true });
+  const procObj = userProcesses.get(processKey);
+  const child = procObj.process;
+  let isAlive = false;
+  if (child && child.pid) {
+    try {
+      process.kill(child.pid, 0); // Throws if not running
+      isAlive = true;
+    } catch (e) {
+      isAlive = false;
+    }
+  }
+  if (isAlive) {
+    procObj.lastUpdated = Date.now();
+    return res.json({ running: true, lastUpdated: true });
+  } else {
+    userProcesses.delete(processKey);
+    if (userProcesses.size === 0) runningProcesses.delete(username);
+    return res.json({ running: false, lastUpdated: false });
+  }
+});
+
+
+app.post('/update-launcher', (req, res) => {
+  const launcherKey = req.headers['x-launcher-key'];
+  if (launcherKey !== "BSRE_LAUNCHER_2026") {
+    return res.status(403).json({ success: false, message: "Unauthorized" });
+  }
+
+  const batchFilePath = "C:\\BATCHFILE\\AGAL.bat";
+  exec(`"${batchFilePath}"`, (error, stdout, stderr) => {
+    if (error) {
+      console.error("❌ Error running batch file:", error);
+      return res.status(500).json({ success: false, message: "Failed to run batch file" });
+    }
+    res.json({ success: true, message: "Launcher updated successfully", DateTime: new Date().toISOString() });
+  });
 });
 
 const PORT = 5002;
