@@ -12,9 +12,6 @@ const { machineIdSync } = pkg;
 import { exec } from "child_process";
 
 
-import { fileURLToPath } from 'url';
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const pkgJson = JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8'));
 const app = express();
 app.use(express.json());
 
@@ -260,10 +257,10 @@ app.get('/get-session', async (req, res) => {
 
 
 
-
 app.get('/launch', async (req, res) => {
-  // Extract query parameters
-  const { path: exePath, username, cocode, module: moduleName, companyName, allowMultipleTabs } = req.query;
+  // console.log("🟢 /launch endpoint hit with query:", req.query);
+
+  const { path: exePath, username, cocode, module: moduleName, companyName } = req.query;
 
   if (!exePath || !username || !cocode || !moduleName || !companyName) {
     console.warn("❌ Missing required parameters");
@@ -276,10 +273,9 @@ app.get('/launch', async (req, res) => {
   }
 
   const userProcesses = runningProcesses.get(username);
-  const processKey = `${moduleName}_${cocode}`;
 
-  // Only block if allowMultipleTabs is not set or is 0
-  if ((!allowMultipleTabs || allowMultipleTabs === "0" || allowMultipleTabs === 0) && userProcesses.has(processKey)) {
+  const processKey = `${moduleName}_${cocode}`;
+  if (userProcesses.has(processKey)) {
     return res.status(409).send("Module already running for this fiscal year.");
   }
 
@@ -299,6 +295,7 @@ app.get('/launch', async (req, res) => {
     console.log(`🚀 Launching EXE: ${exePath} ${argString}`);
     console.log(`${username} is launching ${moduleName} for CoRecNo=${cocode}`);
 
+    const processKey = `${moduleName}_${cocode}`;
     const child = execFile(exePath, [argString], (error, stdout, stderr) => {
       if (error && !error.killed) {
         console.error(`❌ Error launching app for ${username}:`, error);
@@ -308,18 +305,19 @@ app.get('/launch', async (req, res) => {
     });
 
     child.on('exit', (code, signal) => {
-      userProcesses.delete(processKey);
+      // console.log(`👋 App exited for user ${username} module ${moduleName} with code ${code} and signal ${signal}`);
+      userProcesses.delete(processKey); // Use processKey here!
       if (userProcesses.size === 0) {
         runningProcesses.delete(username);
       }
     });
 
-    userProcesses.set(processKey, { process: child, cocode, companyName, lastUpdated: Date.now() });
+    userProcesses.set(processKey, { process: child, cocode, companyName: req.query.companyName, lastUpdated:Date.now() });
     console.log("=== Running Processes ===");
-    for (const [uname, procs] of runningProcesses.entries()) {
-      for (const [key, { process: proc, cocode, companyName }] of procs.entries()) {
+    for (const [username, userProcesses] of runningProcesses.entries()) {
+      for (const [key, { process: proc, cocode, companyName }] of userProcesses.entries()) {
         const [modName, coCode] = key.split('_');
-        console.log(`User: ${uname}, Module: ${modName}, PID: ${proc.pid}, cocode: ${coCode}, CompanyName: ${companyName}`);
+        console.log(`User: ${username}, Module: ${modName}, PID: ${proc.pid}, cocode: ${coCode}, CompanyName: ${companyName}`);
       }
     }
     console.log("========================");
@@ -330,7 +328,6 @@ app.get('/launch', async (req, res) => {
     res.status(500).send(`Failed to launch application: ${err.message}`);
   }
 });
-
 
 
 app.get('/logout', (req, res) => {
@@ -520,17 +517,13 @@ app.post('/update-launcher', (req, res) => {
     return res.status(403).json({ success: false, message: "Unauthorized" });
   }
 
-  const batchFilePath = "C:\\BATCHFILE\\Installer.bat";
+  const batchFilePath = "C:\\BATCHFILE\\AGAL.bat";
   exec(`"${batchFilePath}"`, (error, stdout, stderr) => {
     if (error) {
       console.error("❌ Error running batch file:", error);
       return res.status(500).json({ success: false, message: "Failed to run batch file" });
     }
-    res.json({ 
-      success: true, 
-      message: "Launcher updated successfully", 
-      version: pkgJson.version 
-    });
+    res.json({ success: true, message: "Launcher updated successfully", DateTime: new Date().toISOString() });
   });
 });
 
