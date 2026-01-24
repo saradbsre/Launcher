@@ -136,7 +136,7 @@ async function syncUpdatedFiles(remoteDir, localDir,onProgress) {
 }
 
 app.get('/sync-progress', async (req, res) => {
-  const { exePath } = req.query;
+  const { exePath,exeServerPath } = req.query;
 
   if (!exePath) {
     return res.status(400).send("exePath query param is required");
@@ -157,9 +157,9 @@ app.get('/sync-progress', async (req, res) => {
   }
 
   try {
-    const exeServerPath = await getExeServerPathFromRegistry();
-    const remoteModulePath = path.join(exeServerPath, moduleFolderName);
-
+    const exeServerPathName = exeServerPath
+    const remoteModulePath = path.join(exeServerPathName, moduleFolderName);
+    console.log("exe")
     sendEvent(`🔄 Starting sync from ${remoteModulePath} → ${moduleDir}`);
 
     await syncUpdatedFiles(remoteModulePath, moduleDir, (msg) => {
@@ -263,7 +263,7 @@ app.get('/get-session', async (req, res) => {
 
 app.get('/launch', async (req, res) => {
   // Extract query parameters
-  const { path: exePath, username, cocode, module: moduleName, companyName, allowMultipleTabs } = req.query;
+  const { path: exePath, username, cocode, module: moduleName, companyName, allowMultipleTabs, exeServerPath,connString } = req.query;
 
   if (!exePath || !username || !cocode || !moduleName || !companyName) {
     console.warn("❌ Missing required parameters");
@@ -285,17 +285,16 @@ app.get('/launch', async (req, res) => {
 
   try {
     // Only copy files if module is NOT running
-    const exeServerPath = await getExeServerPathFromRegistry();
-    console.log("🔑 EXESERVERPATH from registry:", exeServerPath);
-
+    const exeServerPathName = exeServerPath;
+    console.log("🔑 EXESERVERPATH from registry:", exeServerPathName);
+    console.log("connString:", connString);
     const moduleDir = path.dirname(exePath);
     const moduleFolderName = path.basename(moduleDir);
-    const remoteModulePath = path.join(exeServerPath, moduleFolderName);
-
+    const remoteModulePath = path.join(exeServerPathName, moduleFolderName);
     console.log(`🔄 Syncing files from ${remoteModulePath} → ${moduleDir}`);
     await syncUpdatedFiles(remoteModulePath, moduleDir);
 
-    const argString = `/nolog/guname=${username}/CoRecNo=${cocode}`;
+    const argString = `/nolog/guname=${username}/CoRecNo=${cocode}/connectionstring=${connString}`;
     console.log(`🚀 Launching EXE: ${exePath} ${argString}`);
     console.log(`${username} is launching ${moduleName} for CoRecNo=${cocode}`);
 
@@ -436,46 +435,46 @@ app.get("/create-launcher-folder", (req, res) => {
 });
 
 // launcher.js
-app.post('/check-registry', (req, res) => {
-  const { Estate, TwoBase } = req.body;
+// app.post('/check-registry', (req, res) => {
+//   const { Estate, TwoBase } = req.body;
 
-  // Check TwoBase.Net registry
-  const regKey = new WinReg({
-    hive: WinReg.HKLM,
-    key: '\\SOFTWARE\\TwoBase.Net'
-  });
+//   // Check TwoBase.Net registry
+//   const regKey = new WinReg({
+//     hive: WinReg.HKLM,
+//     key: '\\SOFTWARE\\TwoBase.Net'
+//   });
 
-  regKey.get('DataPath', (err, item) => {
-    if (err || !item || !item.value) {
-      return res.json({ success: false, message: "TwoBase.Net registry not set" });
-    }
-    const twobase = item.value;
-    // Check if twobase matches your expected string (adjust as needed)
-    console.log("Registry value (twobase):", TwoBase);
-    const isTwoBaseOk = twobase.includes(TwoBase);
-    console.log("TwoBase.Net registry check:", isTwoBaseOk);
-    // Now check Estate
-    const estateKey = new WinReg({
-      hive: WinReg.HKLM,
-      key: '\\SOFTWARE\\EstateNet'
-    });
+//   regKey.get('DataPath', (err, item) => {
+//     if (err || !item || !item.value) {
+//       return res.json({ success: false, message: "TwoBase.Net registry not set" });
+//     }
+//     const twobase = item.value;
+//     // Check if twobase matches your expected string (adjust as needed)
+//     console.log("Registry value (twobase):", TwoBase);
+//     const isTwoBaseOk = twobase.includes(TwoBase);
+//     console.log("TwoBase.Net registry check:", isTwoBaseOk);
+//     // Now check Estate
+//     const estateKey = new WinReg({
+//       hive: WinReg.HKLM,
+//       key: '\\SOFTWARE\\EstateNet'
+//     });
 
-    estateKey.get('DataPath', (err2, item2) => {
-      if (err2 || !item2 || !item2.value) {
-        return res.json({ success: false, message: "Estate registry not set" });
-      }
-      const estate = item2.value;
-      const isEstateOk = estate.includes(Estate);
-      console.log("Estate registry check:", isEstateOk);
+//     estateKey.get('DataPath', (err2, item2) => {
+//       if (err2 || !item2 || !item2.value) {
+//         return res.json({ success: false, message: "Estate registry not set" });
+//       }
+//       const estate = item2.value;
+//       const isEstateOk = estate.includes(Estate);
+//       console.log("Estate registry check:", isEstateOk);
 
-      if (isTwoBaseOk && isEstateOk) {
-        return res.json({ success: true });
-      } else {
-        return res.json({ success: false, message: "Registry values incorrect" });
-      }
-    });
-  });
-});
+//       if (isTwoBaseOk && isEstateOk) {
+//         return res.json({ success: true });
+//       } else {
+//         return res.json({ success: false, message: "Registry values incorrect" });
+//       }
+//     });
+//   });
+// });
 
 
 
