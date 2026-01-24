@@ -533,6 +533,11 @@ app.post('/update-launcher', (req, res) => {
   });
 });
 
+// Endpoint to get launcher version from package.json
+app.get('/launcher-version', (req, res) => {
+  res.json({ version: pkgJson.version });
+});
+
 const PORT = 5002;
 app.listen(PORT, () => {
   console.log(`🚀 Local launcher running on port ${PORT}`);
