@@ -27,7 +27,8 @@ app.use(cors({
     "https://erp.hamda.binshabibgroup.ae",
     "https://erp.cs.binshabibgroup.ae",
     "https://erp.manjalgranites.ae",
-    "https://erp.firehub.ae"
+    "https://erp.firehub.ae",
+    "https://erp.awsinvestment.ae"   // ADDED ON 29/01/2026
   ],    
 }));
 
@@ -215,7 +216,7 @@ import ralsdbConfig from './config/ralsdb.js';
 function getDbConfigForDomain(domain) {
   // Map domain to config
   if (domain.includes('bsre') || domain.includes('cs') || domain.includes('hamda')) return bsredbConfig;
-  if (domain.includes('rals')) return awsdbConfig;
+  if (domain.includes('rals') || domain.includes('aws')) return awsdbConfig;
   if (domain.includes('saeed') || domain.includes('manjal') || domain.includes('firehub')) return ralsdbConfig;
   // Default fallback
   return null;
