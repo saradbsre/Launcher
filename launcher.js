@@ -89,8 +89,62 @@ function getExeServerPathFromRegistry() {
   });
 }
 
-// Sync updated files from remote folder to local
-async function syncUpdatedFiles(remoteDir, localDir,onProgress) {
+// Sync updated files from remote folder to local    changed on 31/01 /2026 by agalya
+// async function syncUpdatedFiles(remoteDir, localDir,onProgress) {
+//   console.log(`🛠️  Starting sync from ${remoteDir} → ${localDir}`);
+
+//   if (!fs.existsSync(remoteDir)) {
+//     console.error(`❌ Remote folder does not exist: ${remoteDir}`);
+//     throw new Error(`Remote folder does not exist: ${remoteDir}`);
+//   }
+
+//   await fse.ensureDir(localDir);
+
+//     const localFilesBefore = await fse.readdir(localDir);
+//   console.log(`📂 Local folder has ${localFilesBefore.length} files before sync.`);
+
+//   const files = await fse.readdir(remoteDir);
+//   console.log(`📁 Found ${files.length} files in remote folder.`);
+
+//   let updatedCount = 0;
+
+//   for (const file of files) {
+//     const remoteFilePath = path.join(remoteDir, file);
+//     const localFilePath = path.join(localDir, file);
+
+//     const remoteStats = await fse.stat(remoteFilePath).catch(() => null);
+//     const localStats = await fse.stat(localFilePath).catch(() => null);
+
+//     if (!remoteStats) {
+//       console.warn(`⚠️  Skipping ${file} - remote file does not exist or can't be read.`);
+//       continue;
+//     }
+
+//     const isUpdated = !localStats || remoteStats.mtime > localStats.mtime;
+
+//     if (isUpdated) {
+//       // console.log(`⬆️  Copying updated file: ${file}`);
+//       await fse.copy(remoteFilePath, localFilePath);
+//       updatedCount++;
+//     } else {
+//       // console.log(`✅ Up-to-date: ${file}`);
+//     }
+//   }
+//   onProgress?.(`📦 Sync complete.`);
+
+//   const localFilesAfter = await fse.readdir(localDir);
+//   console.log(`📂 Local folder has ${localFilesAfter.length} files after sync.`);
+
+//   if (updatedCount === 0) {
+//     console.log(`📦 No updates were necessary. All files are up-to-date.`);
+//   } else {
+//     console.log(`✅ Sync completed. ${updatedCount} file(s) updated.`);
+//   }
+// }
+
+// Sync updated files from remote folder to local, and delete local files not in remote
+// Recursively sync files and folders from remoteDir to localDir
+async function syncUpdatedFiles(remoteDir, localDir, onProgress) {
   console.log(`🛠️  Starting sync from ${remoteDir} → ${localDir}`);
 
   if (!fs.existsSync(remoteDir)) {
@@ -100,40 +154,52 @@ async function syncUpdatedFiles(remoteDir, localDir,onProgress) {
 
   await fse.ensureDir(localDir);
 
-  const files = await fse.readdir(remoteDir);
-  console.log(`📁 Found ${files.length} files in remote folder.`);
+  const remoteEntries = await fse.readdir(remoteDir);
+  const localEntries = await fse.readdir(localDir);
+
+  const remoteSet = new Set(remoteEntries);
 
   let updatedCount = 0;
+  let deletedCount = 0;
 
-  for (const file of files) {
-    const remoteFilePath = path.join(remoteDir, file);
-    const localFilePath = path.join(localDir, file);
+  // 1. Copy/update files and folders from remote to local
+  for (const entry of remoteEntries) {
+    const remotePath = path.join(remoteDir, entry);
+    const localPath = path.join(localDir, entry);
 
-    const remoteStats = await fse.stat(remoteFilePath).catch(() => null);
-    const localStats = await fse.stat(localFilePath).catch(() => null);
+    const remoteStats = await fse.stat(remotePath).catch(() => null);
 
-    if (!remoteStats) {
-      console.warn(`⚠️  Skipping ${file} - remote file does not exist or can't be read.`);
-      continue;
-    }
+    if (!remoteStats) continue;
 
-    const isUpdated = !localStats || remoteStats.mtime > localStats.mtime;
-
-    if (isUpdated) {
-      // console.log(`⬆️  Copying updated file: ${file}`);
-      await fse.copy(remoteFilePath, localFilePath);
-      updatedCount++;
+    if (remoteStats.isDirectory()) {
+      // Recursively sync subdirectory
+      await syncUpdatedFiles(remotePath, localPath, onProgress);
     } else {
-      // console.log(`✅ Up-to-date: ${file}`);
+      const localStats = await fse.stat(localPath).catch(() => null);
+      const isUpdated = !localStats || remoteStats.mtime > localStats.mtime;
+      if (isUpdated) {
+        await fse.copy(remotePath, localPath);
+        updatedCount++;
+        console.log(`⬆️  Copied/Updated file: ${localPath}`);
+      }
     }
   }
+
+  // 2. Delete local files/folders not in remote
+  for (const entry of localEntries) {
+    if (!remoteSet.has(entry)) {
+      const localPath = path.join(localDir, entry);
+      await fse.remove(localPath);
+      deletedCount++;
+      console.log(`🗑️  Deleted local entry not in remote: ${localPath}`);
+    }
+  }
+
   onProgress?.(`📦 Sync complete.`);
 
-  if (updatedCount === 0) {
-    console.log(`📦 No updates were necessary. All files are up-to-date.`);
-  } else {
-    console.log(`✅ Sync completed. ${updatedCount} file(s) updated.`);
-  }
+  const localFilesAfter = await fse.readdir(localDir);
+  console.log(`📂 Local folder has ${localFilesAfter.length} entries after sync.`);
+  console.log(`✅ Sync completed. ${updatedCount} file(s) updated/copied, ${deletedCount} file(s)/folder(s) deleted.`);
 }
 
 app.get('/sync-progress', async (req, res) => {
