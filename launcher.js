@@ -28,7 +28,10 @@ app.use(cors({
     "https://erp.cs.binshabibgroup.ae",
     "https://erp.manjalgranites.ae",
     "https://erp.firehub.ae",
-    "https://erp.awsinvestment.ae"   // ADDED ON 29/01/2026
+    "https://erp.awsinvestment.ae",   // ADDED ON 29/01/2026
+    "https://erp.bsreop.binshabibgroup.ae",
+    "https://erp.csop.binshabibgroup.ae",
+    "https://erp.op.awsinvestment.ae"       // ADDED ON 02/02/2026
   ],    
 }));
 
@@ -288,43 +291,46 @@ function getDbConfigForDomain(domain) {
   return null;
 }
 
-app.get('/get-session', async (req, res) => {
-  const { username,dbName,domainName } = req.query;
-  console.log("🟢 /get-session called with:", { username,dbName,domainName });
-  if (!username) {
-    return res.status(400).json({ message: "username is required" });
-  }
+// app.get('/get-session', async (req, res) => {
+//   const { username,dbName,domainName } = req.query;
+//   console.log("🟢 /get-session called with:", { username,dbName,domainName });
+//   if (!username) {
+//     return res.status(400).json({ message: "username is required" });
+//   }
 
-  const dbConfig = getDbConfigForDomain(domainName);
-  console.log("Using DB config for domain:", domainName, dbConfig ? "found" : "not found");
-  if (!dbConfig) {
-    return res.status(400).json({ message: "Unknown or unsupported domain" });
-  }
+//   const dbConfig = getDbConfigForDomain(domainName);
+//   console.log("Using DB config for domain:", domainName, dbConfig ? "found" : "not found");
+//   if (!dbConfig) {
+//     return res.status(400).json({ message: "Unknown or unsupported domain" });
+//   }
 
-  let pool;
-  try {
-    pool = await mssql.connect(dbConfig);
-    const result = await pool.request()
-      .input('username', mssql.VarChar, username)
-      .query(`SELECT * FROM ${dbName}.dbo.WebLoginSessions WHERE Username = @username`);
+//   let pool;
+//   try {
+//     pool = await mssql.connect(dbConfig);
+//     const result = await pool.request()
+//       .input('username', mssql.VarChar, username)
+//       .query(`SELECT * FROM ${dbName}.dbo.WebLoginSessions WHERE Username = @username`);
 
-    if (result.recordset.length === 0) {
-      return res.status(404).json({ message: "Session not found" });
-    }
-    console.log("✅ Session fetched successfully for user:", username);
+//     if (result.recordset.length === 0) {
+//       return res.status(404).json({ message: "Session not found" });
+//     }
+//     console.log("✅ Session fetched successfully for user:", username);
 
-    // Add computerName to response
-    res.json({ success: true, session: result.recordset[0], computerName: os.hostname() });
-    console.log("🏷️  Sent computer name:", os.hostname());
-  } catch (err) {
-    console.error("❌ Error in get-session:", err);
-    res.status(500).json({ success: false, message: err.message });
-  } finally {
-    if (pool) pool.close();
-  }
+//     // Add computerName to response
+//     res.json({ success: true, session: result.recordset[0], computerName: os.hostname() });
+//     console.log("🏷️  Sent computer name:", os.hostname());
+//   } catch (err) {
+//     console.error("❌ Error in get-session:", err);
+//     res.status(500).json({ success: false, message: err.message });
+//   } finally {
+//     if (pool) pool.close();
+//   }
+// });
+
+app.get('/get-session', (req, res) => {
+  // Just return the computer name, no DB connection
+  res.json({ success: true, computerName: require('os').hostname() });
 });
-
-
 
 
 
