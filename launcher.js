@@ -329,7 +329,7 @@ function getDbConfigForDomain(domain) {
 
 app.get('/get-session', (req, res) => {
   // Just return the computer name, no DB connection
-  res.json({ success: true, computerName: require('os').hostname() });
+  res.json({ success: true, computerName: os.hostname() });
 });
 
 
