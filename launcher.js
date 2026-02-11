@@ -165,25 +165,29 @@ async function syncUpdatedFiles(remoteDir, localDir, onProgress) {
   let updatedCount = 0;
   let deletedCount = 0;
 
-  // 1. Copy/update files and folders from remote to local
+  // 1. Copy files and folders from remote to local if name or mtime is different
   for (const entry of remoteEntries) {
     const remotePath = path.join(remoteDir, entry);
     const localPath = path.join(localDir, entry);
 
     const remoteStats = await fse.stat(remotePath).catch(() => null);
-
     if (!remoteStats) continue;
 
     if (remoteStats.isDirectory()) {
       // Recursively sync subdirectory
       await syncUpdatedFiles(remotePath, localPath, onProgress);
     } else {
+      let shouldCopy = false;
       const localStats = await fse.stat(localPath).catch(() => null);
-      const isUpdated = !localStats || remoteStats.mtime > localStats.mtime;
-      if (isUpdated) {
+      if (!localStats) {
+        shouldCopy = true; // File does not exist locally
+      } else if (remoteStats.mtimeMs !== localStats.mtimeMs) {
+        shouldCopy = true; // File exists but mtime is different
+      }
+      if (shouldCopy) {
         await fse.copy(remotePath, localPath);
         updatedCount++;
-        console.log(`⬆️  Copied/Updated file: ${localPath}`);
+        console.log(`⬆️  Copied file: ${localPath}`);
       }
     }
   }
