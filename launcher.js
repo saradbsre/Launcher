@@ -165,21 +165,26 @@ async function syncUpdatedFiles(remoteDir, localDir, onProgress) {
   let updatedCount = 0;
   let deletedCount = 0;
 
-  // 1. Always copy files and folders from remote to local (overwrite unconditionally)
+  // 1. Copy/update files and folders from remote to local
   for (const entry of remoteEntries) {
     const remotePath = path.join(remoteDir, entry);
     const localPath = path.join(localDir, entry);
 
     const remoteStats = await fse.stat(remotePath).catch(() => null);
+
     if (!remoteStats) continue;
 
     if (remoteStats.isDirectory()) {
       // Recursively sync subdirectory
       await syncUpdatedFiles(remotePath, localPath, onProgress);
     } else {
-      await fse.copy(remotePath, localPath, { overwrite: true });
-      updatedCount++;
-      console.log(`⬆️  Copied file: ${localPath}`);
+      const localStats = await fse.stat(localPath).catch(() => null);
+      const isUpdated = !localStats || remoteStats.mtime > localStats.mtime;
+      if (isUpdated) {
+        await fse.copy(remotePath, localPath);
+        updatedCount++;
+        console.log(`⬆️  Copied/Updated file: ${localPath}`);
+      }
     }
   }
 
