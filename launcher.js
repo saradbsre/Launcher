@@ -147,6 +147,28 @@ function getExeServerPathFromRegistry() {
 
 // Sync updated files from remote folder to local, and delete local files not in remote
 // Recursively sync files and folders from remoteDir to localDir
+
+
+// Helper to copy with retry on EBUSY
+async function copyWithRetry(src, dest, retries = 3, delayMs = 2000) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      await fse.copy(src, dest, { overwrite: true });
+      return true;
+    } catch (err) {
+      if (err.code === 'EBUSY' && attempt < retries) {
+        console.warn(`EBUSY: ${dest} is busy, retrying in ${delayMs}ms (attempt ${attempt})`);
+        await new Promise(res => setTimeout(res, delayMs));
+      } else {
+        console.error(`Failed to copy ${src} to ${dest}:`, err.message);
+        return false;
+      }
+    }
+  }
+  return false;
+}
+
+// Recursively sync files and folders from remoteDir to localDir
 async function syncUpdatedFiles(remoteDir, localDir, onProgress) {
   console.log(`🛠️  Starting sync from ${remoteDir} → ${localDir}`);
 
@@ -165,25 +187,22 @@ async function syncUpdatedFiles(remoteDir, localDir, onProgress) {
   let updatedCount = 0;
   let deletedCount = 0;
 
-  // 1. Copy/update files and folders from remote to local
+  // 1. Always copy files and folders from remote to local (overwrite unconditionally, with retry)
   for (const entry of remoteEntries) {
     const remotePath = path.join(remoteDir, entry);
     const localPath = path.join(localDir, entry);
 
     const remoteStats = await fse.stat(remotePath).catch(() => null);
-
     if (!remoteStats) continue;
 
     if (remoteStats.isDirectory()) {
       // Recursively sync subdirectory
       await syncUpdatedFiles(remotePath, localPath, onProgress);
     } else {
-      const localStats = await fse.stat(localPath).catch(() => null);
-      const isUpdated = !localStats || remoteStats.mtime > localStats.mtime;
-      if (isUpdated) {
-        await fse.copy(remotePath, localPath);
+      const copied = await copyWithRetry(remotePath, localPath);
+      if (copied) {
         updatedCount++;
-        console.log(`⬆️  Copied/Updated file: ${localPath}`);
+        console.log(`⬆️  Copied file: ${localPath}`);
       }
     }
   }
@@ -204,6 +223,8 @@ async function syncUpdatedFiles(remoteDir, localDir, onProgress) {
   console.log(`📂 Local folder has ${localFilesAfter.length} entries after sync.`);
   console.log(`✅ Sync completed. ${updatedCount} file(s) updated/copied, ${deletedCount} file(s)/folder(s) deleted.`);
 }
+
+
 
 app.get('/sync-progress', async (req, res) => {
   const { exePath,exeServerPath } = req.query;
