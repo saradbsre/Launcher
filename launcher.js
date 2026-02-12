@@ -223,6 +223,8 @@ function getExeServerPathFromRegistry() {
 //   console.log(`✅ Sync completed. ${updatedCount} file(s) updated/copied, ${deletedCount} file(s)/folder(s) deleted.`);
 // }
 
+// ...existing code...
+
 async function syncUpdatedFiles(remoteDir, localDir, onProgress) {
   console.log(`🛠️  Starting sync from ${remoteDir} → ${localDir}`);
 
@@ -234,15 +236,11 @@ async function syncUpdatedFiles(remoteDir, localDir, onProgress) {
   await fse.ensureDir(localDir);
 
   const remoteEntries = await fse.readdir(remoteDir);
-  const localEntries = await fse.readdir(localDir);
-
-  const remoteSet = new Set(remoteEntries);
 
   let updatedCount = 0;
-  let deletedCount = 0;
   let ebusyFiles = [];
 
-  // 1. Copy files and folders from remote to local if name or mtime is different
+  // Only copy files from remote to local if name exists and mtime is different
   for (const entry of remoteEntries) {
     const remotePath = path.join(remoteDir, entry);
     const localPath = path.join(localDir, entry);
@@ -263,13 +261,14 @@ async function syncUpdatedFiles(remoteDir, localDir, onProgress) {
       }
       if (shouldCopy) {
         try {
-          await fse.copy(remotePath, localPath);
+          // Try to force overwrite (fs-extra does this by default)
+          await fse.copy(remotePath, localPath, { overwrite: true, errorOnExist: false });
           updatedCount++;
           console.log(`⬆️  Copied file: ${localPath}`);
         } catch (err) {
           if (err.code === 'EBUSY') {
-            console.warn(`⚠️  File busy, will retry: ${localPath}`);
-            ebusyFiles.push({ remotePath, localPath });
+            console.warn(`⚠️  File busy/locked, could not overwrite: ${localPath}`);
+            ebusyFiles.push(localPath);
           } else {
             console.error(`❌ Error copying ${remotePath} to ${localPath}:`, err.message);
           }
@@ -278,56 +277,16 @@ async function syncUpdatedFiles(remoteDir, localDir, onProgress) {
     }
   }
 
-  // Retry EBUSY files up to 3 times with delay
-  for (let attempt = 1; attempt <= 3 && ebusyFiles.length > 0; attempt++) {
-    if (attempt > 1) await new Promise(res => setTimeout(res, 2000));
-    ebusyFiles = await Promise.all(ebusyFiles.map(async ({ remotePath, localPath }) => {
-      try {
-        await fse.copy(remotePath, localPath);
-        updatedCount++;
-        console.log(`⬆️  Copied file after retry: ${localPath}`);
-        return null;
-      } catch (err) {
-        if (err.code === 'EBUSY') {
-          console.warn(`⚠️  Still busy (attempt ${attempt}): ${localPath}`);
-          return { remotePath, localPath };
-        } else {
-          console.error(`❌ Error copying ${remotePath} to ${localPath}:`, err.message);
-          return null;
-        }
-      }
-    }));
-    ebusyFiles = ebusyFiles.filter(Boolean);
-  }
-
   if (ebusyFiles.length > 0) {
-    console.warn(`⚠️  The following files could not be copied after retries:`);
-    ebusyFiles.forEach(f => console.warn(f.localPath));
-  }
-
-  // 2. Delete local files/folders not in remote
-  for (const entry of localEntries) {
-    if (!remoteSet.has(entry)) {
-      const localPath = path.join(localDir, entry);
-      try {
-        await fse.remove(localPath);
-        deletedCount++;
-        console.log(`🗑️  Deleted local entry not in remote: ${localPath}`);
-      } catch (err) {
-        if (err.code !== 'ENOENT') {
-          console.error(`❌ Error deleting ${localPath}:`, err.message);
-        }
-        // Ignore ENOENT (file already missing)
-      }
-    }
+    console.warn(`⚠️  The following files could not be overwritten due to being busy/locked:`);
+    ebusyFiles.forEach(f => console.warn(f));
   }
 
   onProgress?.(`📦 Sync complete.`);
-
-  const localFilesAfter = await fse.readdir(localDir);
-  console.log(`📂 Local folder has ${localFilesAfter.length} entries after sync.`);
-  console.log(`✅ Sync completed. ${updatedCount} file(s) updated/copied, ${deletedCount} file(s)/folder(s) deleted.`);
+  console.log(`✅ Sync completed. ${updatedCount} file(s) updated/copied.`);
 }
+
+// ...existing code...
 
 
 
