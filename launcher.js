@@ -193,15 +193,29 @@ async function syncUpdatedFiles(remoteDir, localDir, onProgress) {
   }
 
   // 2. Delete local files/folders not in remote
+  // for (const entry of localEntries) {
+  //   if (!remoteSet.has(entry)) {
+  //     const localPath = path.join(localDir, entry);
+  //     await fse.remove(localPath);
+  //     deletedCount++;
+  //     console.log(`🗑️  Deleted local entry not in remote: ${localPath}`);
+  //   }
+  // }
   for (const entry of localEntries) {
-    if (!remoteSet.has(entry)) {
-      const localPath = path.join(localDir, entry);
+  if (!remoteSet.has(entry)) {
+    const localPath = path.join(localDir, entry);
+    try {
       await fse.remove(localPath);
       deletedCount++;
       console.log(`🗑️  Deleted local entry not in remote: ${localPath}`);
+    } catch (err) {
+      if (err.code !== 'ENOENT') {
+        console.error(`❌ Error deleting ${localPath}:`, err.message);
+      }
+      // Ignore ENOENT (file already missing)
     }
   }
-
+}
   onProgress?.(`📦 Sync complete.`);
 
   const localFilesAfter = await fse.readdir(localDir);
