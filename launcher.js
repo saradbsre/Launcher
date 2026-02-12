@@ -146,7 +146,83 @@ function getExeServerPathFromRegistry() {
 // }
 
 // Sync updated files from remote folder to local, and delete local files not in remote
-// Recursively sync files and folders from remoteDir to localDir
+// Recursively sync files and folders from remoteDir to localDir  changed on 12/02 /2026 by agalya
+// async function syncUpdatedFiles(remoteDir, localDir, onProgress) {
+//   console.log(`🛠️  Starting sync from ${remoteDir} → ${localDir}`);
+
+//   if (!fs.existsSync(remoteDir)) {
+//     console.error(`❌ Remote folder does not exist: ${remoteDir}`);
+//     throw new Error(`Remote folder does not exist: ${remoteDir}`);
+//   }
+
+//   await fse.ensureDir(localDir);
+
+//   const remoteEntries = await fse.readdir(remoteDir);
+//   const localEntries = await fse.readdir(localDir);
+
+//   const remoteSet = new Set(remoteEntries);
+
+//   let updatedCount = 0;
+//   let deletedCount = 0;
+
+//   // 1. Copy files and folders from remote to local if name or mtime is different
+//   for (const entry of remoteEntries) {
+//     const remotePath = path.join(remoteDir, entry);
+//     const localPath = path.join(localDir, entry);
+
+//     const remoteStats = await fse.stat(remotePath).catch(() => null);
+//     if (!remoteStats) continue;
+
+//     if (remoteStats.isDirectory()) {
+//       // Recursively sync subdirectory
+//       await syncUpdatedFiles(remotePath, localPath, onProgress);
+//     } else {
+//       let shouldCopy = false;
+//       const localStats = await fse.stat(localPath).catch(() => null);
+//       if (!localStats) {
+//         shouldCopy = true; // File does not exist locally
+//       } else if (remoteStats.mtimeMs !== localStats.mtimeMs) {
+//         shouldCopy = true; // File exists but mtime is different
+//       }
+//       if (shouldCopy) {
+//         await fse.copy(remotePath, localPath);
+//         updatedCount++;
+//         console.log(`⬆️  Copied file: ${localPath}`);
+//       }
+//     }
+//   }
+
+//   // 2. Delete local files/folders not in remote
+//   // for (const entry of localEntries) {
+//   //   if (!remoteSet.has(entry)) {
+//   //     const localPath = path.join(localDir, entry);
+//   //     await fse.remove(localPath);
+//   //     deletedCount++;
+//   //     console.log(`🗑️  Deleted local entry not in remote: ${localPath}`);
+//   //   }
+//   // }
+//   for (const entry of localEntries) {
+//   if (!remoteSet.has(entry)) {
+//     const localPath = path.join(localDir, entry);
+//     try {
+//       await fse.remove(localPath);
+//       deletedCount++;
+//       console.log(`🗑️  Deleted local entry not in remote: ${localPath}`);
+//     } catch (err) {
+//       if (err.code !== 'ENOENT') {
+//         console.error(`❌ Error deleting ${localPath}:`, err.message);
+//       }
+//       // Ignore ENOENT (file already missing)
+//     }
+//   }
+// }
+//   onProgress?.(`📦 Sync complete.`);
+
+//   const localFilesAfter = await fse.readdir(localDir);
+//   console.log(`📂 Local folder has ${localFilesAfter.length} entries after sync.`);
+//   console.log(`✅ Sync completed. ${updatedCount} file(s) updated/copied, ${deletedCount} file(s)/folder(s) deleted.`);
+// }
+
 async function syncUpdatedFiles(remoteDir, localDir, onProgress) {
   console.log(`🛠️  Starting sync from ${remoteDir} → ${localDir}`);
 
@@ -164,6 +240,7 @@ async function syncUpdatedFiles(remoteDir, localDir, onProgress) {
 
   let updatedCount = 0;
   let deletedCount = 0;
+  let ebusyFiles = [];
 
   // 1. Copy files and folders from remote to local if name or mtime is different
   for (const entry of remoteEntries) {
@@ -185,43 +262,74 @@ async function syncUpdatedFiles(remoteDir, localDir, onProgress) {
         shouldCopy = true; // File exists but mtime is different
       }
       if (shouldCopy) {
-        await fse.copy(remotePath, localPath);
-        updatedCount++;
-        console.log(`⬆️  Copied file: ${localPath}`);
+        try {
+          await fse.copy(remotePath, localPath);
+          updatedCount++;
+          console.log(`⬆️  Copied file: ${localPath}`);
+        } catch (err) {
+          if (err.code === 'EBUSY') {
+            console.warn(`⚠️  File busy, will retry: ${localPath}`);
+            ebusyFiles.push({ remotePath, localPath });
+          } else {
+            console.error(`❌ Error copying ${remotePath} to ${localPath}:`, err.message);
+          }
+        }
       }
     }
   }
 
-  // 2. Delete local files/folders not in remote
-  // for (const entry of localEntries) {
-  //   if (!remoteSet.has(entry)) {
-  //     const localPath = path.join(localDir, entry);
-  //     await fse.remove(localPath);
-  //     deletedCount++;
-  //     console.log(`🗑️  Deleted local entry not in remote: ${localPath}`);
-  //   }
-  // }
-  for (const entry of localEntries) {
-  if (!remoteSet.has(entry)) {
-    const localPath = path.join(localDir, entry);
-    try {
-      await fse.remove(localPath);
-      deletedCount++;
-      console.log(`🗑️  Deleted local entry not in remote: ${localPath}`);
-    } catch (err) {
-      if (err.code !== 'ENOENT') {
-        console.error(`❌ Error deleting ${localPath}:`, err.message);
+  // Retry EBUSY files up to 3 times with delay
+  for (let attempt = 1; attempt <= 3 && ebusyFiles.length > 0; attempt++) {
+    if (attempt > 1) await new Promise(res => setTimeout(res, 2000));
+    ebusyFiles = await Promise.all(ebusyFiles.map(async ({ remotePath, localPath }) => {
+      try {
+        await fse.copy(remotePath, localPath);
+        updatedCount++;
+        console.log(`⬆️  Copied file after retry: ${localPath}`);
+        return null;
+      } catch (err) {
+        if (err.code === 'EBUSY') {
+          console.warn(`⚠️  Still busy (attempt ${attempt}): ${localPath}`);
+          return { remotePath, localPath };
+        } else {
+          console.error(`❌ Error copying ${remotePath} to ${localPath}:`, err.message);
+          return null;
+        }
       }
-      // Ignore ENOENT (file already missing)
+    }));
+    ebusyFiles = ebusyFiles.filter(Boolean);
+  }
+
+  if (ebusyFiles.length > 0) {
+    console.warn(`⚠️  The following files could not be copied after retries:`);
+    ebusyFiles.forEach(f => console.warn(f.localPath));
+  }
+
+  // 2. Delete local files/folders not in remote
+  for (const entry of localEntries) {
+    if (!remoteSet.has(entry)) {
+      const localPath = path.join(localDir, entry);
+      try {
+        await fse.remove(localPath);
+        deletedCount++;
+        console.log(`🗑️  Deleted local entry not in remote: ${localPath}`);
+      } catch (err) {
+        if (err.code !== 'ENOENT') {
+          console.error(`❌ Error deleting ${localPath}:`, err.message);
+        }
+        // Ignore ENOENT (file already missing)
+      }
     }
   }
-}
+
   onProgress?.(`📦 Sync complete.`);
 
   const localFilesAfter = await fse.readdir(localDir);
   console.log(`📂 Local folder has ${localFilesAfter.length} entries after sync.`);
   console.log(`✅ Sync completed. ${updatedCount} file(s) updated/copied, ${deletedCount} file(s)/folder(s) deleted.`);
 }
+
+
 
 app.get('/sync-progress', async (req, res) => {
   const { exePath,exeServerPath } = req.query;
