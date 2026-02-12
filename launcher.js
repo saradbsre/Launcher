@@ -28,7 +28,10 @@ app.use(cors({
     "https://erp.cs.binshabibgroup.ae",
     "https://erp.manjalgranites.ae",
     "https://erp.firehub.ae",
-    "https://erp.awsinvestment.ae"   // ADDED ON 29/01/2026
+    "https://erp.awsinvestment.ae",   // ADDED ON 29/01/2026
+    "https://erp.bsreop.binshabibgroup.ae",
+    "https://erp.csop.binshabibgroup.ae",
+    "https://erp.op.awsinvestment.ae"       // ADDED ON 02/02/2026
   ],    
 }));
 
@@ -143,7 +146,85 @@ function getExeServerPathFromRegistry() {
 // }
 
 // Sync updated files from remote folder to local, and delete local files not in remote
-// Recursively sync files and folders from remoteDir to localDir
+// Recursively sync files and folders from remoteDir to localDir  changed on 12/02 /2026 by agalya
+// async function syncUpdatedFiles(remoteDir, localDir, onProgress) {
+//   console.log(`🛠️  Starting sync from ${remoteDir} → ${localDir}`);
+
+//   if (!fs.existsSync(remoteDir)) {
+//     console.error(`❌ Remote folder does not exist: ${remoteDir}`);
+//     throw new Error(`Remote folder does not exist: ${remoteDir}`);
+//   }
+
+//   await fse.ensureDir(localDir);
+
+//   const remoteEntries = await fse.readdir(remoteDir);
+//   const localEntries = await fse.readdir(localDir);
+
+//   const remoteSet = new Set(remoteEntries);
+
+//   let updatedCount = 0;
+//   let deletedCount = 0;
+
+//   // 1. Copy files and folders from remote to local if name or mtime is different
+//   for (const entry of remoteEntries) {
+//     const remotePath = path.join(remoteDir, entry);
+//     const localPath = path.join(localDir, entry);
+
+//     const remoteStats = await fse.stat(remotePath).catch(() => null);
+//     if (!remoteStats) continue;
+
+//     if (remoteStats.isDirectory()) {
+//       // Recursively sync subdirectory
+//       await syncUpdatedFiles(remotePath, localPath, onProgress);
+//     } else {
+//       let shouldCopy = false;
+//       const localStats = await fse.stat(localPath).catch(() => null);
+//       if (!localStats) {
+//         shouldCopy = true; // File does not exist locally
+//       } else if (remoteStats.mtimeMs !== localStats.mtimeMs) {
+//         shouldCopy = true; // File exists but mtime is different
+//       }
+//       if (shouldCopy) {
+//         await fse.copy(remotePath, localPath);
+//         updatedCount++;
+//         console.log(`⬆️  Copied file: ${localPath}`);
+//       }
+//     }
+//   }
+
+//   // 2. Delete local files/folders not in remote
+//   // for (const entry of localEntries) {
+//   //   if (!remoteSet.has(entry)) {
+//   //     const localPath = path.join(localDir, entry);
+//   //     await fse.remove(localPath);
+//   //     deletedCount++;
+//   //     console.log(`🗑️  Deleted local entry not in remote: ${localPath}`);
+//   //   }
+//   // }
+//   for (const entry of localEntries) {
+//   if (!remoteSet.has(entry)) {
+//     const localPath = path.join(localDir, entry);
+//     try {
+//       await fse.remove(localPath);
+//       deletedCount++;
+//       console.log(`🗑️  Deleted local entry not in remote: ${localPath}`);
+//     } catch (err) {
+//       if (err.code !== 'ENOENT') {
+//         console.error(`❌ Error deleting ${localPath}:`, err.message);
+//       }
+//       // Ignore ENOENT (file already missing)
+//     }
+//   }
+// }
+//   onProgress?.(`📦 Sync complete.`);
+
+//   const localFilesAfter = await fse.readdir(localDir);
+//   console.log(`📂 Local folder has ${localFilesAfter.length} entries after sync.`);
+//   console.log(`✅ Sync completed. ${updatedCount} file(s) updated/copied, ${deletedCount} file(s)/folder(s) deleted.`);
+// }
+
+// ...existing code...
+
 async function syncUpdatedFiles(remoteDir, localDir, onProgress) {
   console.log(`🛠️  Starting sync from ${remoteDir} → ${localDir}`);
 
@@ -155,52 +236,59 @@ async function syncUpdatedFiles(remoteDir, localDir, onProgress) {
   await fse.ensureDir(localDir);
 
   const remoteEntries = await fse.readdir(remoteDir);
-  const localEntries = await fse.readdir(localDir);
-
-  const remoteSet = new Set(remoteEntries);
 
   let updatedCount = 0;
-  let deletedCount = 0;
+  let ebusyFiles = [];
 
-  // 1. Copy/update files and folders from remote to local
+  // Only copy files from remote to local if name exists and mtime is different
   for (const entry of remoteEntries) {
     const remotePath = path.join(remoteDir, entry);
     const localPath = path.join(localDir, entry);
 
     const remoteStats = await fse.stat(remotePath).catch(() => null);
-
     if (!remoteStats) continue;
 
     if (remoteStats.isDirectory()) {
       // Recursively sync subdirectory
       await syncUpdatedFiles(remotePath, localPath, onProgress);
     } else {
+      let shouldCopy = false;
       const localStats = await fse.stat(localPath).catch(() => null);
-      const isUpdated = !localStats || remoteStats.mtime > localStats.mtime;
-      if (isUpdated) {
-        await fse.copy(remotePath, localPath);
-        updatedCount++;
-        console.log(`⬆️  Copied/Updated file: ${localPath}`);
+      if (!localStats) {
+        shouldCopy = true; // File does not exist locally
+      } else if (remoteStats.mtimeMs !== localStats.mtimeMs) {
+        shouldCopy = true; // File exists but mtime is different
+      }
+      if (shouldCopy) {
+        try {
+          // Try to force overwrite (fs-extra does this by default)
+          await fse.copy(remotePath, localPath, { overwrite: true, errorOnExist: false });
+          updatedCount++;
+          console.log(`⬆️  Copied file: ${localPath}`);
+        } catch (err) {
+          if (err.code === 'EBUSY') {
+            console.warn(`⚠️  File busy/locked, could not overwrite: ${localPath}`);
+            ebusyFiles.push(localPath);
+          } else {
+            console.error(`❌ Error copying ${remotePath} to ${localPath}:`, err.message);
+          }
+        }
       }
     }
   }
 
-  // 2. Delete local files/folders not in remote
-  for (const entry of localEntries) {
-    if (!remoteSet.has(entry)) {
-      const localPath = path.join(localDir, entry);
-      await fse.remove(localPath);
-      deletedCount++;
-      console.log(`🗑️  Deleted local entry not in remote: ${localPath}`);
-    }
+  if (ebusyFiles.length > 0) {
+    console.warn(`⚠️  The following files could not be overwritten due to being busy/locked:`);
+    ebusyFiles.forEach(f => console.warn(f));
   }
 
   onProgress?.(`📦 Sync complete.`);
-
-  const localFilesAfter = await fse.readdir(localDir);
-  console.log(`📂 Local folder has ${localFilesAfter.length} entries after sync.`);
-  console.log(`✅ Sync completed. ${updatedCount} file(s) updated/copied, ${deletedCount} file(s)/folder(s) deleted.`);
+  console.log(`✅ Sync completed. ${updatedCount} file(s) updated/copied.`);
 }
+
+// ...existing code...
+
+
 
 app.get('/sync-progress', async (req, res) => {
   const { exePath,exeServerPath } = req.query;
@@ -288,43 +376,46 @@ function getDbConfigForDomain(domain) {
   return null;
 }
 
-app.get('/get-session', async (req, res) => {
-  const { username,dbName,domainName } = req.query;
-  console.log("🟢 /get-session called with:", { username,dbName,domainName });
-  if (!username) {
-    return res.status(400).json({ message: "username is required" });
-  }
+// app.get('/get-session', async (req, res) => {
+//   const { username,dbName,domainName } = req.query;
+//   console.log("🟢 /get-session called with:", { username,dbName,domainName });
+//   if (!username) {
+//     return res.status(400).json({ message: "username is required" });
+//   }
 
-  const dbConfig = getDbConfigForDomain(domainName);
-  console.log("Using DB config for domain:", domainName, dbConfig ? "found" : "not found");
-  if (!dbConfig) {
-    return res.status(400).json({ message: "Unknown or unsupported domain" });
-  }
+//   const dbConfig = getDbConfigForDomain(domainName);
+//   console.log("Using DB config for domain:", domainName, dbConfig ? "found" : "not found");
+//   if (!dbConfig) {
+//     return res.status(400).json({ message: "Unknown or unsupported domain" });
+//   }
 
-  let pool;
-  try {
-    pool = await mssql.connect(dbConfig);
-    const result = await pool.request()
-      .input('username', mssql.VarChar, username)
-      .query(`SELECT * FROM ${dbName}.dbo.WebLoginSessions WHERE Username = @username`);
+//   let pool;
+//   try {
+//     pool = await mssql.connect(dbConfig);
+//     const result = await pool.request()
+//       .input('username', mssql.VarChar, username)
+//       .query(`SELECT * FROM ${dbName}.dbo.WebLoginSessions WHERE Username = @username`);
 
-    if (result.recordset.length === 0) {
-      return res.status(404).json({ message: "Session not found" });
-    }
-    console.log("✅ Session fetched successfully for user:", username);
+//     if (result.recordset.length === 0) {
+//       return res.status(404).json({ message: "Session not found" });
+//     }
+//     console.log("✅ Session fetched successfully for user:", username);
 
-    // Add computerName to response
-    res.json({ success: true, session: result.recordset[0], computerName: os.hostname() });
-    console.log("🏷️  Sent computer name:", os.hostname());
-  } catch (err) {
-    console.error("❌ Error in get-session:", err);
-    res.status(500).json({ success: false, message: err.message });
-  } finally {
-    if (pool) pool.close();
-  }
+//     // Add computerName to response
+//     res.json({ success: true, session: result.recordset[0], computerName: os.hostname() });
+//     console.log("🏷️  Sent computer name:", os.hostname());
+//   } catch (err) {
+//     console.error("❌ Error in get-session:", err);
+//     res.status(500).json({ success: false, message: err.message });
+//   } finally {
+//     if (pool) pool.close();
+//   }
+// });
+
+app.get('/get-session', (req, res) => {
+  // Just return the computer name, no DB connection
+  res.json({ success: true, computerName: os.hostname() });
 });
-
-
 
 
 
