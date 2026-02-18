@@ -31,7 +31,8 @@ app.use(cors({
     "https://erp.awsinvestment.ae",   // ADDED ON 29/01/2026
     "https://erp.bsreop.binshabibgroup.ae",
     "https://erp.csop.binshabibgroup.ae",
-    "https://erp.op.awsinvestment.ae"       // ADDED ON 02/02/2026
+    "https://erp.op.awsinvestment.ae",       // ADDED ON 02/02/2026
+    "https://erp.saeedproperty.ae",       // ADDED ON 18/02/2026
   ],    
 }));
 
