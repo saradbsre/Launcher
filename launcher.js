@@ -26,7 +26,7 @@ app.use(cors({
     "https://erp.ralscont.binshabibgroup.ae",
     "https://erp.hamda.binshabibgroup.ae",
     "https://erp.cs.binshabibgroup.ae",
-    "https://erp.manjalgranites.ae",
+    "https://erp.manjal.binshabibgroup.ae", // ADDED ON 10/04/2026
     "https://erp.firehub.ae",
     "https://erp.awsinvestment.ae",   // ADDED ON 29/01/2026
     "https://erp.bsreop.binshabibgroup.ae",
