@@ -33,7 +33,8 @@ app.use(cors({
     "https://erp.csop.binshabibgroup.ae",
     "https://erp.op.awsinvestment.ae",       // ADDED ON 02/02/2026
     "https://erp.saeedproperty.ae",       // ADDED ON 18/02/2026
-    "https://erp.bank.binshabibgroup.ae"
+    "https://erp.bank.binshabibgroup.ae",
+    "https://erp.ralscontracting.com/", // added on 31/10/2026
   ],    
 }));
 
